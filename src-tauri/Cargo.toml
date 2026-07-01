@@ -19,15 +19,17 @@ path = "src/bin/mesh-consoled.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-mesh-llm-sdk = { path = "../../mesh-llm/crates/mesh-llm-sdk", features = ["serving"] }
+# mesh-llm crates come from the upstream repo, pinned by Cargo.lock; bump with
+# `cargo update -p mesh-llm-sdk` (etc.) to track main.
+mesh-llm-sdk = { git = "https://github.com/Mesh-LLM/mesh-llm", features = ["serving"] }
 # default-features = false: the default `web-ui` feature embeds the operator
 # console's React build (and requires its npm toolchain); we ship our own UI.
-mesh-llm-host-runtime = { path = "../../mesh-llm/crates/mesh-llm-host-runtime", default-features = false, features = ["dynamic-native-runtime"] }
-mesh-llm-node = { path = "../../mesh-llm/crates/mesh-llm-node" }
-mesh-llm-events = { path = "../../mesh-llm/crates/mesh-llm-events" }
-mesh-llm-system = { path = "../../mesh-llm/crates/mesh-llm-system" }
-# directory crates/mesh-client, package mesh-llm-client, lib name mesh_client
-mesh-llm-client = { path = "../../mesh-llm/crates/mesh-client" }
+mesh-llm-host-runtime = { git = "https://github.com/Mesh-LLM/mesh-llm", default-features = false, features = ["dynamic-native-runtime"] }
+mesh-llm-node = { git = "https://github.com/Mesh-LLM/mesh-llm" }
+mesh-llm-events = { git = "https://github.com/Mesh-LLM/mesh-llm" }
+mesh-llm-system = { git = "https://github.com/Mesh-LLM/mesh-llm" }
+# package mesh-llm-client (dir crates/mesh-client), lib name mesh_client
+mesh-llm-client = { git = "https://github.com/Mesh-LLM/mesh-llm" }
 
 tauri = { version = "2", features = [] }
 axum = "0.8"

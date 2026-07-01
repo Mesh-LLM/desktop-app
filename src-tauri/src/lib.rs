@@ -20,6 +20,14 @@ pub fn init_process_defaults() {
         // Safety: called from main before any other threads exist.
         unsafe { std::env::set_var("HF_HUB_DISABLE_XET", "1") };
     }
+    // Chunked-parallel model downloads (patched fork): office networks shape
+    // long-lived flows hard (single stream: 15MB/s burst → stalled dead by
+    // ~350MB; 4 short-lived range GETs: 25MB/s sustained). 96MB chunks keep
+    // every connection inside the fast phase.
+    if std::env::var_os("HF_HUB_PARALLEL_DOWNLOAD").is_none() {
+        // Safety: called from main before any other threads exist.
+        unsafe { std::env::set_var("HF_HUB_PARALLEL_DOWNLOAD", "4") };
+    }
 
     tracing_subscriber::fmt()
         .with_env_filter(

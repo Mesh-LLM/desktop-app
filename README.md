@@ -37,7 +37,9 @@ a genuine end-to-end test that hosts a real mesh, decodes the real QR invite
 token, spawns a second backend instance that joins it, and asserts streamed
 chat across the iroh tunnel.
 
-The backend reuses mesh-llm directly (path deps): `hardware::survey()` +
+The backend reuses mesh-llm directly (git deps on
+github.com/Mesh-LLM/mesh-llm, pinned via Cargo.lock — `cargo update -p
+mesh-llm-sdk` to track main): `hardware::survey()` +
 `auto_model_pack()` for the diagnosis, the curated model catalog with
 comfortable/snug/too-big fit labels, `download_model_ref_with_progress_details`
 for downloads, and the embedded `MeshNode` daemon for serve/join/publish.
@@ -85,6 +87,13 @@ Metal native runtime into the shared HF/mesh-llm caches.
   it yourself. `HF_HUB_DISABLE_XET=0 just backend` re-enables xet. The patch
   is upstreamable to Mesh-LLM/hf-hub (matches Python huggingface_hub's env
   contract).
+- **Model downloads are chunked-parallel by default** (fork feature,
+  `HF_HUB_PARALLEL_DOWNLOAD=4`). Office networks also shape plain long-lived
+  HTTP flows: a single CDN GET bursts to ~15MB/s, collapses to KB/s, and dies
+  around 350MB — while four parallel 100MB range requests sustain ~25MB/s on
+  the same link. Files ≥192MB are fetched as 96MB ranges written at offset;
+  measured through the app: a 4.4GB model downloaded + loaded + serving in
+  232s. Set `HF_HUB_PARALLEL_DOWNLOAD=0` for the single-stream path.
 - Byte-level download progress only flows through the `OutputSink` when the
   sink reports `ConsoleSessionMode::InteractiveDashboard` (otherwise the
   host-runtime draws ANSI bars on stderr) — see `ConsoleSink` in

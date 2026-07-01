@@ -1,0 +1,8 @@
+/target
+.hermit/
+node_modules/
+ui/dist/
+ui/test-results/
+ui/playwright-report/
+ui/e2e/.hf-cache/
+ui/e2e/.runtime-cache/

@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = ["src-tauri"]
+
+# Cargo only honors [patch] from the root manifest of the workspace being
+# built, so mesh-llm's hf-hub patch (fork adding download-progress events that
+# mesh-llm-host-runtime imports) must be mirrored here verbatim.
+[patch.crates-io]
+hf-hub = { git = "https://github.com/Mesh-LLM/hf-hub", branch = "mesh-llm" }
+
+# Mirrors mesh-llm's dev profile: GGUF startup hashes the source model with
+# sha2 before the native model open, so keep those crates near release speed
+# in dev builds or local model loads crawl.
+[profile.dev.package.sha2]
+opt-level = 3
+
+[profile.dev.package.sha2-asm]
+opt-level = 3

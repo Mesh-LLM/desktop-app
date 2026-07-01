@@ -1,0 +1,45 @@
+[package]
+name = "mesh-console"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "mesh_console"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mesh-console"
+path = "src/main.rs"
+
+[[bin]]
+name = "mesh-consoled"
+path = "src/bin/mesh-consoled.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+mesh-llm-sdk = { path = "../../mesh-llm/crates/mesh-llm-sdk", features = ["serving"] }
+# default-features = false: the default `web-ui` feature embeds the operator
+# console's React build (and requires its npm toolchain); we ship our own UI.
+mesh-llm-host-runtime = { path = "../../mesh-llm/crates/mesh-llm-host-runtime", default-features = false, features = ["dynamic-native-runtime"] }
+mesh-llm-node = { path = "../../mesh-llm/crates/mesh-llm-node" }
+mesh-llm-events = { path = "../../mesh-llm/crates/mesh-llm-events" }
+mesh-llm-system = { path = "../../mesh-llm/crates/mesh-llm-system" }
+# directory crates/mesh-client, package mesh-llm-client, lib name mesh_client
+mesh-llm-client = { path = "../../mesh-llm/crates/mesh-client" }
+
+tauri = { version = "2", features = [] }
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures-util = "0.3"
+mime_guess = "2"
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+rust-embed = "8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

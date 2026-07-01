@@ -1,0 +1,40 @@
+@import 'tailwindcss';
+
+@theme {
+  /* Semantic tokens — dark is the shipped PoC theme; light stays cheap later. */
+  --color-bg: #0b0d12;
+  --color-panel: #12151c;
+  --color-inset: #181c25;
+  --color-edge: #262b36;
+  --color-ink: #f2f3f5;
+  --color-ink-muted: #9aa1ad;
+  --color-ink-faint: #6a7180;
+  --color-accent: #4cc2e8;
+  --color-good: #3fd08a;
+  --color-warn: #e8b04c;
+  --color-bad: #e86a5a;
+
+  --font-sans: 'Inter Tight', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+
+  --radius-card: 12px;
+  --radius-control: 8px;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

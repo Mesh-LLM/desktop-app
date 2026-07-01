@@ -4,9 +4,13 @@ members = ["src-tauri"]
 
 # Cargo only honors [patch] from the root manifest of the workspace being
 # built, so mesh-llm's hf-hub patch (fork adding download-progress events that
-# mesh-llm-host-runtime imports) must be mirrored here verbatim.
+# mesh-llm-host-runtime imports) must be mirrored here. We point at a local
+# clone of that fork (../hf-hub, branch mesh-console/disable-xet-env — pinned
+# upstream rev fd3bfca + one commit) that honors HF_HUB_DISABLE_XET: xet's
+# chunked CAS protocol stalls behind corporate proxies where a plain CDN GET
+# runs at full speed, and the app forces the HTTP path by default.
 [patch.crates-io]
-hf-hub = { git = "https://github.com/Mesh-LLM/hf-hub", branch = "mesh-llm" }
+hf-hub = { path = "../hf-hub/hf-hub" }
 
 # Mirrors mesh-llm's dev profile: GGUF startup hashes the source model with
 # sha2 before the native model open, so keep those crates near release speed

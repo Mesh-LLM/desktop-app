@@ -16,9 +16,18 @@ interface ProgressProps {
   onErrorReset: () => void
 }
 
+type StageState = 'done' | 'active' | 'pending'
+
+function formatEta(seconds: number): string {
+  if (seconds < 60) return 'under a minute left'
+  if (seconds < 90 * 60) return `about ${Math.max(1, Math.round(seconds / 60))} min left`
+  return `about ${Math.round(seconds / 3600)} h left`
+}
+
 export default function Progress({ onCancel, onErrorReset }: ProgressProps) {
-  const { phase, download } = useApp()
+  const { phase, download, downloadRate } = useApp()
   const [lineIdx, setLineIdx] = useState(0)
+  const { bytesPerSec, etaSeconds } = downloadRate
 
   useEffect(() => {
     const t = setInterval(() => setLineIdx((i) => (i + 1) % SOVEREIGNTY_LINES.length), 12_000)
@@ -44,12 +53,35 @@ export default function Progress({ onCancel, onErrorReset }: ProgressProps) {
     )
   }
 
-  const isDownloading = phase.phase === 'downloading'
   const isRuntime = phase.phase === 'installing_runtime'
+  const isDownloading = phase.phase === 'downloading'
+  const isStarting = phase.phase === 'starting' || phase.phase === 'idle'
+  const modelName = isDownloading
+    ? phase.model
+    : (phase.phase === 'starting' && phase.model) || 'your model'
+
+  const stages: Array<{ id: string; label: string; state: StageState }> = [
+    {
+      id: 'engine',
+      label: "Prepare this Mac's AI engine",
+      state: isRuntime ? 'active' : 'done',
+    },
+    {
+      id: 'download',
+      label: `Download ${modelName}`,
+      state: isRuntime ? 'pending' : isDownloading ? 'active' : 'done',
+    },
+    {
+      id: 'load',
+      label: 'Load into AI memory & start your mesh',
+      state: isStarting ? 'active' : 'pending',
+    },
+  ]
+
   const heading = isRuntime
     ? 'Preparing your Mac’s AI engine…'
     : isDownloading
-      ? `Downloading ${phase.model}`
+      ? `Downloading ${modelName}`
       : 'Waking it up…'
   const sub = isRuntime
     ? 'A one-time download so models can run on this Mac.'
@@ -58,11 +90,16 @@ export default function Progress({ onCancel, onErrorReset }: ProgressProps) {
       : 'Loading the model into your Mac’s AI memory — under a minute.'
 
   const activeDownload =
-    download && !download.done && (isRuntime ? download.kind === 'runtime' : true) ? download : null
+    download &&
+    !download.done &&
+    (isRuntime ? download.kind === 'runtime' : download.kind === 'model')
+      ? download
+      : null
   const pct =
     activeDownload?.downloaded_bytes != null && activeDownload.total_bytes
       ? (activeDownload.downloaded_bytes / activeDownload.total_bytes) * 100
       : null
+  const showBar = isRuntime || isDownloading
 
   return (
     <div
@@ -76,18 +113,46 @@ export default function Progress({ onCancel, onErrorReset }: ProgressProps) {
         <p className="mt-3 max-w-lg text-[15px] text-ink-muted">{sub}</p>
       </div>
 
+      {/* stage checklist */}
+      <div className="flex flex-col gap-2 font-mono text-[14px]" data-testid="progress-stages">
+        {stages.map((stage) => (
+          <div
+            key={stage.id}
+            data-testid={`stage-${stage.id}`}
+            data-state={stage.state}
+            className={`flex items-center gap-2 transition-opacity ${
+              stage.state === 'pending' ? 'opacity-30' : 'opacity-100'
+            }`}
+          >
+            <span className={stage.state === 'done' ? 'text-good' : 'text-accent'}>
+              {stage.state === 'done' ? '+' : stage.state === 'active' ? '›' : '·'}
+            </span>
+            <span className={stage.state === 'active' ? 'text-ink' : 'text-ink-muted'}>
+              {stage.label}
+            </span>
+          </div>
+        ))}
+      </div>
+
       <div className="w-full max-w-xl">
-        <ProgressBar pct={isDownloading || isRuntime ? pct : null} />
+        <ProgressBar pct={showBar ? pct : null} />
         {activeDownload && (
           <p
             className="mt-3 text-center font-mono text-[13px] text-ink-muted"
             data-testid="progress-stats"
           >
-            {pct !== null && `${Math.round(pct)}%`}
+            {pct !== null && `${pct.toFixed(pct < 10 ? 1 : 0)}%`}
             {activeDownload.downloaded_bytes != null &&
               ` · ${formatBytes(activeDownload.downloaded_bytes)}${
                 activeDownload.total_bytes ? ` of ${formatBytes(activeDownload.total_bytes)}` : ''
               }`}
+            {bytesPerSec !== null && ` · ${formatBytes(bytesPerSec)}/s`}
+            {etaSeconds !== null && ` · ${formatEta(etaSeconds)}`}
+          </p>
+        )}
+        {activeDownload?.file && (
+          <p className="mt-1 truncate text-center font-mono text-[11px] text-ink-faint">
+            {activeDownload.file}
           </p>
         )}
       </div>

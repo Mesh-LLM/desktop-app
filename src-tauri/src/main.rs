@@ -11,12 +11,7 @@ use std::net::{Ipv4Addr, SocketAddr, TcpListener as StdTcpListener};
 use std::sync::Arc;
 
 fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
-        .with_writer(std::io::stderr)
-        .init();
+    mesh_console::init_process_defaults();
 
     let (state, app_port) = start_backend();
     let url: tauri::Url = format!("http://127.0.0.1:{app_port}/")

@@ -1,4 +1,4 @@
-use mesh_llm_events::{ModelProgressStatus, OutputEvent, OutputSink};
+use mesh_llm_events::{ConsoleSessionMode, ModelProgressStatus, OutputEvent, OutputSink};
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::io;
@@ -14,6 +14,8 @@ pub enum AppEvent {
         file: Option<String>,
         downloaded_bytes: Option<u64>,
         total_bytes: Option<u64>,
+        /// preparing | downloading | done — mirrors ModelProgressStatus.
+        status: &'static str,
         done: bool,
     },
     NodeEvent {
@@ -41,6 +43,14 @@ impl OutputSink for ConsoleSink {
         }
         Ok(())
     }
+
+    /// Byte-level ModelDownloadProgress only flows through the sink when the
+    /// host-runtime believes an interactive dashboard is attached
+    /// (`interactive_tui_active()` in models/catalog.rs draw()); otherwise it
+    /// draws ANSI progress bars on stderr. Our UI *is* the dashboard.
+    fn console_session_mode(&self) -> Option<ConsoleSessionMode> {
+        Some(ConsoleSessionMode::InteractiveDashboard)
+    }
 }
 
 fn map_event(event: OutputEvent) -> Option<AppEvent> {
@@ -58,6 +68,11 @@ fn map_event(event: OutputEvent) -> Option<AppEvent> {
             file,
             downloaded_bytes,
             total_bytes,
+            status: match status {
+                ModelProgressStatus::Ensuring => "preparing",
+                ModelProgressStatus::Downloading => "downloading",
+                ModelProgressStatus::Ready => "done",
+            },
             done: matches!(status, ModelProgressStatus::Ready),
         },
         InviteToken {

@@ -73,9 +73,22 @@ Metal native runtime into the shared HF/mesh-llm caches.
 
 ### Gotchas
 
-- The workspace root `Cargo.toml` **must** mirror mesh-llm's
-  `[patch.crates-io] hf-hub` entry — cargo ignores patches declared in
-  dependencies' workspaces.
+- The workspace root `Cargo.toml` **must** carry a `[patch.crates-io] hf-hub`
+  entry — cargo ignores patches declared in dependencies' workspaces. Ours
+  points at a **local clone of the Mesh-LLM/hf-hub fork** (`../hf-hub`, branch
+  `mesh-console/disable-xet-env`: pinned upstream rev + one commit) that
+  honors `HF_HUB_DISABLE_XET`.
+- **Model downloads skip xet by default.** Xet's many-way chunked CAS
+  protocol stalls behind corporate proxies (observed ~150KB/s and frozen
+  progress vs ~14MB/s for a plain CDN GET on the same office network), so
+  `init_process_defaults()` sets `HF_HUB_DISABLE_XET=1` unless you exported
+  it yourself. `HF_HUB_DISABLE_XET=0 just backend` re-enables xet. The patch
+  is upstreamable to Mesh-LLM/hf-hub (matches Python huggingface_hub's env
+  contract).
+- Byte-level download progress only flows through the `OutputSink` when the
+  sink reports `ConsoleSessionMode::InteractiveDashboard` (otherwise the
+  host-runtime draws ANSI bars on stderr) — see `ConsoleSink` in
+  `src-tauri/src/events.rs`.
 - `mesh-llm-host-runtime` is used with `default-features = false` +
   `dynamic-native-runtime`: no llama.cpp is ever compiled; Metal dylibs are
   downloaded at runtime (`install_native_runtime`) and loaded via

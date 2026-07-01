@@ -46,9 +46,15 @@ test('host flow: scan → reveal → visibility → progress → mesh live with 
   await expect(page.getByText('Who can join your mesh?')).toBeVisible()
   await page.getByTestId('visibility-continue').click()
 
-  // Progress: download percentage appears
+  // Progress: staged checklist + download percentage, rate and ETA appear
   await expect(page.getByTestId('progress-screen')).toBeVisible()
+  await expect(page.getByTestId('stage-download')).toHaveAttribute('data-state', 'active', {
+    timeout: 5000,
+  })
+  await expect(page.getByTestId('stage-engine')).toHaveAttribute('data-state', 'done')
   await expect(page.getByTestId('progress-stats')).toContainText('%', { timeout: 5000 })
+  await expect(page.getByTestId('progress-stats')).toContainText('/s', { timeout: 5000 })
+  await expect(page.getByTestId('progress-stats')).toContainText('left')
 
   // Mesh live: QR + copy + footer
   await expect(page.getByTestId('mesh-live-screen')).toBeVisible({ timeout: 10_000 })

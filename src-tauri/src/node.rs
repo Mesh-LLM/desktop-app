@@ -162,6 +162,7 @@ async fn ensure_runtime(state: &Arc<AppState>) -> Result<()> {
                 file: None,
                 downloaded_bytes: Some(p.downloaded_bytes),
                 total_bytes: p.total_bytes,
+                status: if p.finished { "done" } else { "downloading" },
                 done: p.finished,
             });
         },

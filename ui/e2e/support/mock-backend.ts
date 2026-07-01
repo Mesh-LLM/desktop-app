@@ -155,15 +155,18 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
       await sleep(120)
       if (download) {
         emitApp({ type: 'phase', phase: 'downloading', model: target.model ?? 'model' })
-        for (const pct of [15, 46, 82]) {
-          await sleep(100)
+        // Long enough (~2s) for the UI's windowed rate/ETA to appear and be
+        // asserted before the phase moves on.
+        for (const pct of [5, 15, 28, 42, 55, 68, 82, 94]) {
+          await sleep(250)
           emitApp({
             type: 'download_progress',
             kind: 'model',
             label: String(target.model ?? 'model'),
-            file: null,
+            file: 'model-file.gguf',
             downloaded_bytes: pct * 4e6,
             total_bytes: 400e6,
+            status: 'downloading',
             done: false,
           })
         }

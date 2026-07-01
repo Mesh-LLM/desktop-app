@@ -28,6 +28,7 @@ export interface DownloadProgress {
   file: string | null
   downloaded_bytes: number | null
   total_bytes: number | null
+  status: 'preparing' | 'downloading' | 'done'
   done: boolean
 }
 

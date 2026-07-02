@@ -49,6 +49,9 @@ export interface HardwareReport {
   vram_gb: number
   vram_display: string
   hostname: string | null
+  /** Free space on the model-cache volume; 0 (display "—") if the probe failed. */
+  disk_free_bytes: number
+  disk_free_display: string
 }
 
 export interface CatalogEntry {

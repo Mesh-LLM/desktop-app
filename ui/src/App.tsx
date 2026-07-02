@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Welcome from './screens/Welcome'
 import JoinFlow from './screens/JoinFlow'
+import PublicJoin from './screens/PublicJoin'
 import PowerSetup from './screens/PowerSetup'
 import Visibility from './screens/Visibility'
 import Progress from './screens/Progress'
+import PublicProgress from './screens/PublicProgress'
 import MeshLive from './screens/MeshLive'
 import Main from './screens/Main'
 import { appApi } from './lib/api'
@@ -14,15 +16,23 @@ type View =
   | { name: 'welcome' }
   | { name: 'join'; prefillToken?: string }
   | { name: 'join-setup'; token: string } // power setup for join-and-share
+  | { name: 'public-mode' } // contribute vs passive for the global mesh
+  | { name: 'public-setup' } // power setup for a global-mesh contributor
+  | { name: 'public-upgrade-setup' } // power setup while already connected passively
   | { name: 'host-setup' }
   | { name: 'host-visibility'; model: string }
-  | { name: 'progress'; goal: 'host' | 'join' | 'public' }
+  | { name: 'progress'; goal: 'host' | 'join'; flavor?: 'public-passive' | 'public-share' }
   | { name: 'main' }
 
 export default function App() {
   const { phase } = useApp()
   const [view, setView] = useState<View>({ name: 'welcome' })
   const [booted, setBooted] = useState(false)
+  // A model queued to share on the global mesh. A chat-only client node has no
+  // AI runtime, so upgrading means shutdown + rejoin with share:true — and
+  // shutdown mid-startup races the launch task, so the switch only fires once
+  // the phase is 'running' (see the effect below).
+  const [pendingShare, setPendingShare] = useState<string | null>(null)
 
   useEffect(() => {
     connect()
@@ -36,9 +46,47 @@ export default function App() {
       .finally(() => setBooted(true))
   }, [])
 
+  // Apply a queued passive→contributor upgrade once the connection is up.
+  // No cleanup-cancellation here: the shutdown we issue flips the phase, which
+  // would re-run a cancelling effect and abort the rejoin. Instead a ref
+  // debounces the fire (StrictMode-safe) and the rejoin double-checks the
+  // queue is still set (Cancel clears it mid-flight).
+  const pendingShareRef = useRef<string | null>(null)
+  useEffect(() => {
+    pendingShareRef.current = pendingShare
+  }, [pendingShare])
+  const upgradeInFlight = useRef(false)
+  useEffect(() => {
+    if (!pendingShare || phase.phase !== 'running' || upgradeInFlight.current) return
+    upgradeInFlight.current = true
+    const model = pendingShare
+    void (async () => {
+      try {
+        await appApi.shutdown()
+      } catch {
+        /* join below still 409s if the node is genuinely stuck */
+      }
+      if (pendingShareRef.current === model) {
+        void appApi.join('', true, model, { public: true })
+        setPendingShare(null)
+        setView({ name: 'progress', goal: 'join', flavor: 'public-share' })
+      }
+      upgradeInFlight.current = false
+    })()
+  }, [pendingShare, phase.phase])
+
+  // Entry point for both upgrade CTAs (public load screen + Main sidebar):
+  // queue the model and make sure the public progress screen is what's up
+  // while the switch happens.
+  const queueShareUpgrade = (model: string) => {
+    setPendingShare(model)
+    setView({ name: 'progress', goal: 'join', flavor: 'public-passive' })
+  }
+
   if (!booted) return null
 
   const leaveMesh = () => {
+    setPendingShare(null)
     void appApi.shutdown()
     setView({ name: 'welcome' })
   }
@@ -47,14 +95,43 @@ export default function App() {
     case 'welcome':
       return (
         <Welcome
+          onJoinPublic={() => setView({ name: 'public-mode' })}
           onJoin={(prefillToken) => setView({ name: 'join', prefillToken })}
           onHost={() => setView({ name: 'host-setup' })}
-          onPublic={() => {
-            // Client mode: instant chat, no runtime/model download gating
-            // entry. Contributing on the public mesh is a later opt-in.
-            void appApi.joinPublic(false)
-            setView({ name: 'progress', goal: 'public' })
+        />
+      )
+
+    case 'public-mode':
+      return (
+        <PublicJoin
+          onBack={() => setView({ name: 'welcome' })}
+          onPassive={() => {
+            void appApi.join('', false, undefined, { public: true })
+            setView({ name: 'progress', goal: 'join', flavor: 'public-passive' })
           }}
+          onContribute={() => setView({ name: 'public-setup' })}
+        />
+      )
+
+    case 'public-setup':
+      return (
+        <PowerSetup
+          onBack={() => setView({ name: 'public-mode' })}
+          onModelChosen={(model) => {
+            void appApi.join('', true, model, { public: true })
+            setView({ name: 'progress', goal: 'join', flavor: 'public-share' })
+          }}
+        />
+      )
+
+    case 'public-upgrade-setup':
+      // Browse-the-catalog path of the passive→contributor upgrade: the node
+      // keeps connecting/running underneath; choosing a model queues the
+      // switch, which the pendingShare effect applies once it's safe.
+      return (
+        <PowerSetup
+          onBack={() => setView({ name: 'progress', goal: 'join', flavor: 'public-passive' })}
+          onModelChosen={queueShareUpgrade}
         />
       )
 
@@ -106,8 +183,11 @@ export default function App() {
 
     case 'progress': {
       // Derived transition: once the backend reaches Running, hosts land on
-      // the "mesh is live" QR moment and joiners go straight to the chat.
-      if (phase.phase === 'running') {
+      // the "mesh is live" QR moment and contributors go straight to the
+      // chat. A passive public join instead rests on its own screen ("ready
+      // to chat" + the share offer) until the user moves on — and stays there
+      // through the reconnect when a share upgrade is queued.
+      if (phase.phase === 'running' && view.flavor !== 'public-passive') {
         if (view.goal === 'host') {
           const done = () => setView({ name: 'main' })
           return (
@@ -119,24 +199,45 @@ export default function App() {
             />
           )
         }
-        return <Main onLeave={leaveMesh} />
+        return (
+          <Main
+            onLeave={leaveMesh}
+            onStartSharing={() => setView({ name: 'public-upgrade-setup' })}
+          />
+        )
       }
-      return (
-        <Progress
-          publicMesh={view.goal === 'public'}
-          onCancel={() => {
-            void appApi.shutdown()
-            setView({ name: 'welcome' })
-          }}
-          onErrorReset={() => {
-            void appApi.reset()
-            setView({ name: 'welcome' })
-          }}
-        />
-      )
+      const cancel = () => {
+        setPendingShare(null)
+        void appApi.shutdown()
+        setView({ name: 'welcome' })
+      }
+      const errorReset = () => {
+        setPendingShare(null)
+        void appApi.reset()
+        setView({ name: 'welcome' })
+      }
+      if (view.flavor) {
+        return (
+          <PublicProgress
+            flavor={view.flavor}
+            pendingShare={pendingShare}
+            onShareModel={queueShareUpgrade}
+            onBrowseModels={() => setView({ name: 'public-upgrade-setup' })}
+            onStartChatting={() => setView({ name: 'main' })}
+            onCancel={cancel}
+            onErrorReset={errorReset}
+          />
+        )
+      }
+      return <Progress onCancel={cancel} onErrorReset={errorReset} />
     }
 
     case 'main':
-      return <Main onLeave={leaveMesh} />
+      return (
+        <Main
+          onLeave={leaveMesh}
+          onStartSharing={() => setView({ name: 'public-upgrade-setup' })}
+        />
+      )
   }
 }

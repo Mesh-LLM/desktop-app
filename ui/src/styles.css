@@ -1,7 +1,8 @@
 @import 'tailwindcss';
 
 @theme {
-  /* Semantic tokens — dark is the shipped PoC theme; light stays cheap later. */
+  /* Semantic tokens — dark is the shipped default; html.light overrides the
+     custom properties below (utilities compile to var(--color-*)). */
   --color-bg: #0b0d12;
   --color-panel: #12151c;
   --color-inset: #181c25;
@@ -10,6 +11,9 @@
   --color-ink-muted: #9aa1ad;
   --color-ink-faint: #6a7180;
   --color-accent: #4cc2e8;
+  /* text on accent-filled controls + accent hover shade */
+  --color-accent-ink: #06222e;
+  --color-accent-hover: #6ad0f0;
   --color-good: #3fd08a;
   --color-warn: #e8b04c;
   --color-bad: #e86a5a;
@@ -19,6 +23,27 @@
 
   --radius-card: 12px;
   --radius-control: 8px;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+html.light {
+  color-scheme: light;
+  --color-bg: #f4f6f9;
+  --color-panel: #ffffff;
+  --color-inset: #e9edf3;
+  --color-edge: #d3dae3;
+  --color-ink: #151a22;
+  --color-ink-muted: #4e5866;
+  --color-ink-faint: #7c8694;
+  --color-accent: #0e8fbe; /* darkened for contrast on white */
+  --color-accent-ink: #ffffff;
+  --color-accent-hover: #0c7da7;
+  --color-good: #178f5c;
+  --color-warn: #a8720d;
+  --color-bad: #cf3f2e;
 }
 
 body {

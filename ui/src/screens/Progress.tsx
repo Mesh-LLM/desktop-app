@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, ProgressBar } from '../components/ui'
+import { Button, ProgressBar, Spinner } from '../components/ui'
 import { formatBytes } from '../lib/api'
 import { useApp } from '../lib/store'
 
@@ -147,7 +147,7 @@ export default function Progress({ publicMesh = false, onCancel, onErrorReset }:
       </div>
 
       <div className="w-full max-w-xl">
-        <ProgressBar pct={showBar ? pct : null} />
+        {showBar ? <ProgressBar pct={pct} /> : <Spinner className="mx-auto" />}
         {activeDownload && (
           <p
             className="mt-3 text-center font-mono text-[13px] text-ink-muted"

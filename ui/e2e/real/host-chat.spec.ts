@@ -16,8 +16,18 @@ test('host a private mesh through the UI and chat with the real model', async ({
   await expect(page.getByText('Your own AI. On your own machines.')).toBeVisible()
   await page.getByTestId('welcome-host').click()
 
+  // A machine that already has models downloaded skips the scan and lands on
+  // the installed picker; force the full hardware check so the tiny test model
+  // is selectable from the list regardless of cache state.
+  const installed = page.getByTestId('installed-screen')
+  const reco = page.getByTestId('recommendation-card')
+  await expect(installed.or(reco)).toBeVisible({ timeout: 30_000 })
+  if (await installed.isVisible()) {
+    await page.getByTestId('rerun-diagnostic').click()
+  }
+
   // Real hardware scan: chip + memory come from mesh_llm_system::hardware::survey()
-  await expect(page.getByTestId('recommendation-card')).toBeVisible({ timeout: 30_000 })
+  await expect(reco).toBeVisible({ timeout: 30_000 })
   // The reveal spec strip shows the real detected hardware
   await expect(page.getByText(/AI memory/)).toBeVisible()
 

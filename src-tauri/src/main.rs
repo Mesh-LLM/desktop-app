@@ -8,7 +8,16 @@
 use mesh_console::events::ConsoleSink;
 use mesh_console::state::{AppState, Ports};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener as StdTcpListener};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use tauri::Manager;
+use tauri::menu::{Menu, MenuItem, MenuItemKind, PredefinedMenuItem, Submenu};
+
+/// Webview zoom bounds for the View menu (Cmd+= / Cmd+- / Cmd+0). WKWebView's
+/// pageZoom scales the page layout, so the whole UI grows/shrinks like a
+/// browser zoom.
+const ZOOM_STEP: f64 = 1.1;
+const ZOOM_MIN: f64 = 0.5;
+const ZOOM_MAX: f64 = 2.0;
 
 fn main() {
     mesh_console::init_process_defaults();
@@ -18,14 +27,73 @@ fn main() {
         .parse()
         .expect("valid url");
 
+    let zoom = Arc::new(Mutex::new(load_zoom()));
+    let zoom_menu = zoom.clone();
+    let zoom_setup = zoom.clone();
+
     let shutdown_state = state.clone();
     tauri::Builder::default()
+        .menu(|handle| {
+            let menu = Menu::default(handle)?;
+            let zoom_reset = MenuItem::with_id(
+                handle,
+                "zoom-reset",
+                "Actual Size",
+                true,
+                Some("CmdOrCtrl+0"),
+            )?;
+            let zoom_in =
+                MenuItem::with_id(handle, "zoom-in", "Zoom In", true, Some("CmdOrCtrl+="))?;
+            let zoom_out =
+                MenuItem::with_id(handle, "zoom-out", "Zoom Out", true, Some("CmdOrCtrl+-"))?;
+            // macOS's default menu already ships a "View" submenu (Fullscreen);
+            // append there rather than adding a second View. Other platforms'
+            // defaults may not have one — create it then.
+            let view = menu.items()?.into_iter().find_map(|item| match item {
+                MenuItemKind::Submenu(sub) if sub.text().is_ok_and(|t| t == "View") => Some(sub),
+                _ => None,
+            });
+            match view {
+                Some(view) => view.append_items(&[
+                    &PredefinedMenuItem::separator(handle)?,
+                    &zoom_reset,
+                    &zoom_in,
+                    &zoom_out,
+                ])?,
+                None => menu.append(&Submenu::with_items(
+                    handle,
+                    "View",
+                    true,
+                    &[&zoom_reset, &zoom_in, &zoom_out],
+                )?)?,
+            }
+            Ok(menu)
+        })
+        .on_menu_event(move |app, event| {
+            let mut zoom = zoom_menu.lock().expect("zoom lock");
+            let next = match event.id().as_ref() {
+                "zoom-in" => (*zoom * ZOOM_STEP).clamp(ZOOM_MIN, ZOOM_MAX),
+                "zoom-out" => (*zoom / ZOOM_STEP).clamp(ZOOM_MIN, ZOOM_MAX),
+                "zoom-reset" => 1.0,
+                _ => return,
+            };
+            *zoom = next;
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_zoom(next);
+            }
+            save_zoom(next);
+        })
         .setup(move |app| {
-            tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
-                .title("Mesh")
-                .inner_size(1100.0, 720.0)
-                .min_inner_size(900.0, 620.0)
-                .build()?;
+            let window =
+                tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
+                    .title("Mesh")
+                    .inner_size(1100.0, 720.0)
+                    .min_inner_size(900.0, 620.0)
+                    .build()?;
+            let initial = *zoom_setup.lock().expect("zoom lock");
+            if (initial - 1.0).abs() > f64::EPSILON {
+                let _ = window.set_zoom(initial);
+            }
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -44,6 +112,30 @@ fn main() {
                 let _ = rx.recv_timeout(std::time::Duration::from_secs(5));
             }
         });
+}
+
+/// Zoom persists in a tiny JSON blob next to the app's other data
+/// (~/Library/Application Support/mesh-console on macOS). Best effort — a
+/// missing or corrupt file just means 100%.
+fn settings_path() -> Option<std::path::PathBuf> {
+    dirs::data_dir().map(|dir| dir.join("mesh-console").join("ui-settings.json"))
+}
+
+fn load_zoom() -> f64 {
+    settings_path()
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .and_then(|value| value.get("zoom").and_then(|z| z.as_f64()))
+        .map(|zoom| zoom.clamp(ZOOM_MIN, ZOOM_MAX))
+        .unwrap_or(1.0)
+}
+
+fn save_zoom(zoom: f64) {
+    let Some(path) = settings_path() else { return };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(path, serde_json::json!({ "zoom": zoom }).to_string());
 }
 
 fn start_backend() -> (Arc<AppState>, u16) {

@@ -1,4 +1,5 @@
 import type {
+  CatalogEntry,
   ChatCompletedInfo,
   DiagnoseReport,
   Phase,
@@ -29,11 +30,16 @@ export const appApi = {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ model, visibility, mesh_name: meshName ?? null }),
     }).then((r) => json<{ ok: boolean }>(r)),
-  join: (token: string, share: boolean, model?: string) =>
+  join: (token: string, share: boolean, model?: string, opts?: { public?: boolean }) =>
     fetch('/app/join', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ token, share, model: model ?? null }),
+      body: JSON.stringify({
+        token,
+        share,
+        model: model ?? null,
+        public: opts?.public ?? false,
+      }),
     }).then((r) => json<{ ok: boolean }>(r)),
   /** Join the public mesh (no invite token). share=true contributes compute
    * with the backend's tiny default model — no model decision needed. */
@@ -44,8 +50,29 @@ export const appApi = {
       body: JSON.stringify({ public: true, share }),
     }).then((r) => json<{ ok: boolean }>(r)),
   invite: () => fetch('/app/invite').then((r) => json<{ token: string; approx_bytes: number }>(r)),
+  /** Open the node's web console in the system default browser. */
+  openConsole: () =>
+    fetch('/app/open_console', { method: 'POST' }).then((r) =>
+      json<{ ok: boolean; url: string }>(r),
+    ),
   shutdown: () => fetch('/app/shutdown', { method: 'POST' }).then((r) => json<{ ok: boolean }>(r)),
   reset: () => fetch('/app/reset', { method: 'POST' }).then((r) => json<{ ok: boolean }>(r)),
+  /** Models already downloaded on this Mac (catalog names). */
+  installedModels: () => fetch('/app/installed_models').then((r) => json<CatalogEntry[]>(r)),
+  /** Turn a downloaded model on for serving on this (serving) node. */
+  serveModel: (model: string) =>
+    fetch('/app/serve_model', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model }),
+    }).then((r) => json<unknown>(r)),
+  /** Stop serving a model on this node. */
+  unserveModel: (model: string) =>
+    fetch('/app/unserve_model', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model }),
+    }).then((r) => json<unknown>(r)),
 }
 
 export const nodeApi = {

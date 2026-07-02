@@ -15,6 +15,13 @@ members = ["src-tauri"]
 [patch.crates-io]
 hf-hub = { git = "https://github.com/Mesh-LLM/hf-hub", branch = "mesh-console/disable-xet-env" }
 
+# Upstream's git repo doesn't carry the BUILT operator console (dist/ ships in
+# release artifacts only), so the web-ui feature would embed an empty console.
+# vendor/mesh-llm-ui is the same crate plus a committed dist/ built at the
+# pinned rev — refresh with scripts/update-console-ui.sh when bumping mesh-llm.
+[patch."https://github.com/Mesh-LLM/mesh-llm"]
+mesh-llm-ui = { path = "vendor/mesh-llm-ui" }
+
 [profile.dev.package.sha2]
 opt-level = 3
 

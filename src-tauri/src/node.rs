@@ -24,7 +24,8 @@ pub struct JoinRequest {
     /// Invite token for a private mesh. Ignored when `public` is set.
     #[serde(default)]
     pub token: String,
-    /// true = join the public mesh (no token needed).
+    /// true = join THE global mesh via public discovery (no invite token);
+    /// false = join a specific mesh by `token`.
     #[serde(default)]
     pub public: bool,
     /// true = also serve a model on this machine ("share this Mac's power"),
@@ -73,6 +74,9 @@ async fn run_host(state: &Arc<AppState>, req: HostRequest) -> Result<()> {
         .model(&req.model)
         .api_port(state.ports.api)
         .console_port(state.ports.console)
+        // Serve the embedded operator console at the console port's root —
+        // "Open advanced console" points there. Off by default (headless).
+        .console_ui(true)
         .startup_timeout(Duration::from_secs(180));
     if let Some(name) = &req.mesh_name {
         builder = builder.mesh_name(name);
@@ -125,14 +129,21 @@ async fn run_join(state: &Arc<AppState>, mut req: JoinRequest) -> Result<()> {
     } else {
         MeshNode::builder().client()
     };
-    builder = if req.public {
-        builder.auto_join_public_mesh()
+    if req.public {
+        // Join the worldwide swarm via public discovery — no token. A
+        // contributor also publishes so its served model is reachable.
+        builder = builder.auto_join_public_mesh();
+        if req.share {
+            builder = builder.publish(true);
+        }
     } else {
-        builder.join_token(req.token.trim())
-    };
+        builder = builder.join_token(req.token.trim());
+    }
     builder = builder
         .api_port(state.ports.api)
         .console_port(state.ports.console)
+        // Same embedded operator console as the host path (see run_host).
+        .console_ui(true)
         .startup_timeout(Duration::from_secs(180));
     if req.share
         && let Some(model) = &req.model
@@ -147,15 +158,20 @@ async fn run_join(state: &Arc<AppState>, mut req: JoinRequest) -> Result<()> {
     state
         .set_phase(Phase::Running(RunningInfo {
             mode: Mode::Join,
-            // Visibility of a joined mesh is the host's choice; private is the
-            // safe display default until /api/status says otherwise.
-            visibility: Visibility::Private,
+            // The global mesh is public by definition; a token-joined mesh's
+            // visibility is the host's choice, so private is the safe display
+            // default until /api/status says otherwise.
+            visibility: if req.public {
+                Visibility::Public
+            } else {
+                Visibility::Private
+            },
             model: req.model,
             serving: req.share,
             invite_token,
             api_port: state.ports.api,
             console_port: state.ports.console,
-            mesh_name: None,
+            mesh_name: req.public.then(|| "Global mesh".to_string()),
         }))
         .await;
     Ok(())

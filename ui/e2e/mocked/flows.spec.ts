@@ -5,27 +5,228 @@ test.beforeEach(async ({ page }) => {
   await installMockBackend(page)
 })
 
-test('welcome screen offers the join/host fork with the privacy line', async ({ page }) => {
+test('welcome screen heroes the global mesh with the private options below', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByText('Your own AI. On your own machines.')).toBeVisible()
+  await expect(page.getByTestId('welcome-public')).toBeVisible()
+  await expect(page.getByTestId('welcome-public')).toContainText('global mesh')
   await expect(page.getByTestId('welcome-join')).toBeVisible()
   await expect(page.getByTestId('welcome-host')).toBeVisible()
-  await expect(page.getByTestId('welcome-public')).toBeVisible()
   await expect(
     page.getByText('Everything stays between your devices — end-to-end encrypted.'),
   ).toBeVisible()
 })
 
-test('public mesh card joins with no token and share on, straight to progress', async ({
+test('global mesh: "just connect" joins as a public passive client', async ({ page }) => {
+  await page.goto('/')
+  await page.getByTestId('welcome-public').click()
+  await expect(page.getByTestId('public-join-screen')).toBeVisible()
+  // "Just connect" is preselected — continue straight through.
+  await page.getByTestId('public-continue').click()
+
+  // The public-flavored load screen: connection copy, no download language.
+  await expect(page.getByTestId('public-progress-screen')).toBeVisible()
+  await expect(page.getByTestId('public-progress-screen')).toHaveAttribute(
+    'data-flavor',
+    'public-passive',
+  )
+  await expect(page.getByTestId('stage-download')).toHaveCount(0)
+  await expect(page.getByTestId('stage-reach')).toBeVisible()
+
+  // Rests at "ready to chat" (with the share offer) instead of auto-jumping.
+  await expect(page.getByTestId('start-chatting')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('public-upgrade-card')).toBeVisible()
+  await page.getByTestId('start-chatting').click()
+
+  await expect(page.getByTestId('mesh-name')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('mesh-name')).toContainText('Global mesh')
+  await expect(page.getByTestId('mesh-status')).toContainText('open')
+
+  const joinCalls = await page.evaluate(
+    () => (window as unknown as { __mockState: { joinCalls: unknown[] } }).__mockState.joinCalls,
+  )
+  expect(joinCalls).toHaveLength(1)
+  expect(joinCalls[0]).toMatchObject({ public: true, share: false })
+})
+
+test('global mesh: passive client upgrades to sharing an installed model', async ({ page }) => {
+  await page.goto('/')
+  await page.getByTestId('welcome-public').click()
+  await page.getByTestId('public-continue').click()
+
+  // Once connected, share an already-downloaded model straight from the card.
+  await expect(page.getByTestId('start-chatting')).toBeVisible({ timeout: 10_000 })
+  await page.getByTestId('public-share-GLM-4.7-Flash-Q4_K_M').click()
+
+  // The upgrade is a shutdown + rejoin with share:true…
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { __mockState: { shutdownCalls: unknown[] } }).__mockState
+            .shutdownCalls.length,
+      ),
+    )
+    .toBe(1)
+  // …whose download runs on the contributor-flavored screen…
+  await expect(page.getByTestId('public-progress-screen')).toHaveAttribute(
+    'data-flavor',
+    'public-share',
+    { timeout: 10_000 },
+  )
+  // …and lands in the chat once serving.
+  await expect(page.getByTestId('mesh-name')).toBeVisible({ timeout: 15_000 })
+
+  const joinCalls = await page.evaluate(
+    () => (window as unknown as { __mockState: { joinCalls: unknown[] } }).__mockState.joinCalls,
+  )
+  expect(joinCalls).toHaveLength(2)
+  expect(joinCalls[1]).toMatchObject({
+    public: true,
+    share: true,
+    model: 'GLM-4.7-Flash-Q4_K_M',
+  })
+})
+
+test('main window offers "start sharing" to a public chat-only client', async ({ page }) => {
+  await installMockBackend(page, {
+    startRunning: true,
+    runningPhase: {
+      mode: 'join',
+      visibility: 'public',
+      serving: false,
+      model: null,
+      mesh_name: 'Global mesh',
+    },
+    installedInDiagnose: true,
+  })
+  await page.goto('/')
+  await expect(page.getByTestId('mesh-name')).toContainText('Global mesh')
+
+  // The chat-only note is an action on the global mesh.
+  await page.getByTestId('start-sharing').click()
+
+  // Into the model picker (installed fast path), then the upgrade fires.
+  await expect(page.getByTestId('installed-screen')).toBeVisible({ timeout: 6000 })
+  await page.getByTestId('installed-row-Qwen3-0.6B-Q4_K_M').click()
+  await page.getByTestId('use-installed').click()
+
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { __mockState: { shutdownCalls: unknown[] } }).__mockState
+            .shutdownCalls.length,
+      ),
+    )
+    .toBe(1)
+  // The rejoin fires right after the shutdown resolves — wait for it.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { __mockState: { joinCalls: unknown[] } }).__mockState.joinCalls
+            .length,
+      ),
+    )
+    .toBe(1)
+  const joinCalls = await page.evaluate(
+    () => (window as unknown as { __mockState: { joinCalls: unknown[] } }).__mockState.joinCalls,
+  )
+  expect(joinCalls[0]).toMatchObject({
+    public: true,
+    share: true,
+    model: 'Qwen3-0.6B-Q4_K_M',
+  })
+})
+
+test('global mesh: "run a model" routes through the hardware check, then contributes', async ({
   page,
 }) => {
   await page.goto('/')
   await page.getByTestId('welcome-public').click()
-  // One-click: no token, no model, CLIENT mode — instant chat, no download.
+  await page.getByTestId('public-mode-contribute').click()
+  await page.getByTestId('public-continue').click()
+
+  // Same hardware scan beat as starting a private mesh — now with real disk.
+  await expect(page.getByText('Checking your Mac...')).toBeVisible()
+  await expect(page.getByTestId('scan-free-disk')).toHaveText('812 GB', { timeout: 5000 })
+  await expect(page.getByTestId('recommendation-card')).toBeVisible({ timeout: 6000 })
+  await page.getByTestId('use-model').click()
+
+  // Contributor download runs on the public-flavored screen (global-mesh copy).
+  await expect(page.getByTestId('public-progress-screen')).toHaveAttribute(
+    'data-flavor',
+    'public-share',
+  )
+  await expect(page.getByTestId('stage-connect')).toBeVisible()
+
+  await expect(page.getByTestId('mesh-name')).toBeVisible({ timeout: 10_000 })
   const joinCalls = await page.evaluate(
     () => (window as unknown as { __mockState: { joinCalls: unknown[] } }).__mockState.joinCalls,
   )
-  expect(joinCalls).toEqual([{ public: true, share: false }])
+  expect(joinCalls[0]).toMatchObject({
+    public: true,
+    share: true,
+    model: 'Qwen3-Coder-Next-Q4_K_M',
+  })
+})
+
+test('setup skips the scan when a model is already downloaded', async ({ page }) => {
+  await installMockBackend(page, { installedInDiagnose: true })
+  await page.goto('/')
+  await page.getByTestId('welcome-host').click()
+
+  // Straight to the installed picker — no "Checking your Mac…" beat.
+  await expect(page.getByTestId('installed-screen')).toBeVisible({ timeout: 6000 })
+  await expect(page.getByTestId('installed-row-Qwen3-0.6B-Q4_K_M')).toBeVisible()
+
+  // …but the full hardware check is one click away for swapping.
+  await page.getByTestId('rerun-diagnostic').click()
+  await expect(page.getByText('Checking your Mac...')).toBeVisible()
+})
+
+test('mesh view lists downloaded models and toggles serving on this Mac', async ({ page }) => {
+  await installMockBackend(page, { startRunning: true })
+  await page.goto('/')
+  await expect(page.getByTestId('mesh-name')).toBeVisible()
+
+  const qwen = page.getByTestId('local-model-Qwen3-0.6B-Q4_K_M')
+  const glm = page.getByTestId('local-model-GLM-4.7-Flash-Q4_K_M')
+  // Qwen3-0.6B matches the mock's serving_models → On; GLM is downloaded but off.
+  await expect(qwen).toContainText('On')
+  await expect(glm).toContainText('Off')
+
+  // Turn GLM on → serve_model; turn Qwen off → unserve_model.
+  await glm.click()
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { __mockState: { serveCalls: unknown[] } }).__mockState.serveCalls
+            .length,
+      ),
+    )
+    .toBe(1)
+  await qwen.click()
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { __mockState: { unserveCalls: unknown[] } }).__mockState
+            .unserveCalls.length,
+      ),
+    )
+    .toBe(1)
+
+  const [serveCalls, unserveCalls] = await page.evaluate(() => {
+    const s = window as unknown as {
+      __mockState: { serveCalls: unknown[]; unserveCalls: unknown[] }
+    }
+    return [s.__mockState.serveCalls, s.__mockState.unserveCalls]
+  })
+  expect(serveCalls[0]).toMatchObject({ model: 'GLM-4.7-Flash-Q4_K_M' })
+  expect(unserveCalls[0]).toMatchObject({ model: 'Qwen3-0.6B-Q4_K_M' })
 })
 
 test('host flow: scan → reveal → visibility → progress → mesh live with QR → main window', async ({
@@ -126,6 +327,45 @@ test('join flow validates the invite code and reaches the main window as chat-on
   )
   expect(joinCalls).toHaveLength(1)
   expect(joinCalls[0]).toMatchObject({ token: goodToken, share: false })
+})
+
+test('appearance setting flips to light mode and persists across reload', async ({ page }) => {
+  await installMockBackend(page, { startRunning: true })
+  await page.goto('/')
+  await expect(page.getByTestId('mesh-name')).toBeVisible()
+
+  await page.getByTestId('settings-button').click()
+  await expect(page.getByTestId('theme-picker')).toBeVisible()
+  await page.getByTestId('theme-light').click()
+  await expect(page.locator('html')).toHaveClass(/light/)
+  expect(await page.evaluate(() => localStorage.getItem('mesh-theme'))).toBe('light')
+
+  await page.reload()
+  await expect(page.getByTestId('mesh-name')).toBeVisible()
+  await expect(page.locator('html')).toHaveClass(/light/)
+
+  // Back to dark — the shipped default.
+  await page.getByTestId('settings-button').click()
+  await page.getByTestId('theme-dark').click()
+  await expect(page.locator('html')).toHaveClass(/dark/)
+})
+
+test('settings opens the advanced console through the backend', async ({ page }) => {
+  await installMockBackend(page, { startRunning: true })
+  await page.goto('/')
+  await expect(page.getByTestId('mesh-name')).toBeVisible()
+
+  await page.getByTestId('settings-button').click()
+  await page.getByTestId('open-console').click()
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { __mockState: { openConsoleCalls: unknown[] } }).__mockState
+            .openConsoleCalls.length,
+      ),
+    )
+    .toBe(1)
 })
 
 test('invite modal shows QR and copyable code from the main window', async ({ page }) => {

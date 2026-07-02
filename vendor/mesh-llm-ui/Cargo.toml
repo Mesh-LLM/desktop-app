@@ -1,0 +1,30 @@
+# Vendored copy of upstream crates/mesh-llm-ui (Apache-2.0), substituted via
+# the [patch."https://github.com/Mesh-LLM/mesh-llm"] entry in the root
+# Cargo.toml. Upstream's git repo carries only the crate sources — the built
+# React console (dist/) ships in release artifacts, not the repo — so the
+# `web-ui` feature would embed an EMPTY console when building from the git
+# dependency. This copy adds the committed dist/ built at the pinned rev.
+#
+# The `version` below MUST stay semver-compatible with the version pinned in
+# Cargo.lock (mesh-llm-host-runtime requires it) — when bumping the mesh-llm
+# crates, re-run scripts/update-console-ui.sh to refresh sources, dist, and
+# this version together.
+
+[package]
+name = "mesh-llm-ui"
+version = "0.72.1"
+edition = "2024"
+description = "Embedded Mesh LLM web console assets (vendored for mesh-console)"
+license = "Apache-2.0"
+repository = "https://github.com/Mesh-LLM/mesh-llm"
+
+# Opt out of the mesh-console workspace: this crate replaces a git-source
+# package and must resolve standalone.
+[workspace]
+
+[features]
+default = ["embed-assets"]
+embed-assets = ["dep:include_dir"]
+
+[dependencies]
+include_dir = { version = "0.7", optional = true }

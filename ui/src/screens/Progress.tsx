@@ -3,16 +3,6 @@ import { Button, ProgressBar, Spinner } from '../components/ui'
 import { formatBytes } from '../lib/api'
 import { useApp } from '../lib/store'
 
-// Public mesh is a shared community pool — honest wording: it's a trial, not
-// private. Nudge toward starting/joining a private mesh for the real thing.
-const PUBLIC_LINES = [
-  'The public mesh is a shared community pool — great for trying things out.',
-  'Heads up: chats here travel across machines other people own.',
-  'Want it private? Start your own mesh and invite your people.',
-  'Your own mesh keeps everything between devices you trust — end-to-end.',
-  'No account, no cloud — just borrowed community compute.',
-]
-
 const SOVEREIGNTY_LINES = [
   'Once this finishes, your questions never leave your own mesh.',
   'No account. No cloud. No one listening in.',
@@ -22,8 +12,6 @@ const SOVEREIGNTY_LINES = [
 ]
 
 interface ProgressProps {
-  /** Joining the shared public mesh: swap the privacy lines for honest trial wording. */
-  publicMesh?: boolean
   onCancel: () => void
   onErrorReset: () => void
 }
@@ -36,7 +24,7 @@ function formatEta(seconds: number): string {
   return `about ${Math.round(seconds / 3600)} h left`
 }
 
-export default function Progress({ publicMesh = false, onCancel, onErrorReset }: ProgressProps) {
+export default function Progress({ onCancel, onErrorReset }: ProgressProps) {
   const { phase, download, downloadRate } = useApp()
   const [lineIdx, setLineIdx] = useState(0)
   const { bytesPerSec, etaSeconds } = downloadRate
@@ -170,7 +158,7 @@ export default function Progress({ publicMesh = false, onCancel, onErrorReset }:
       </div>
 
       <p className="max-w-md text-center text-[14px] text-ink-faint transition-opacity duration-700">
-        {(publicMesh ? PUBLIC_LINES : SOVEREIGNTY_LINES)[lineIdx]}
+        {SOVEREIGNTY_LINES[lineIdx]}
       </p>
 
       <button

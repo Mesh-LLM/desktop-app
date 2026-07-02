@@ -5,8 +5,9 @@
 # crate with vendor/mesh-llm-ui so the `web-ui` feature of
 # mesh-llm-host-runtime embeds a REAL operator console ("advanced console",
 # port 3131). Upstream's repo carries only the crate sources — the built
-# React app (dist/) ships in release artifacts — so we build it once here and
-# commit the output.
+# React app (dist/) ships in release artifacts — so we build it here into
+# vendor/mesh-llm-ui/dist (gitignored; build.rs serves an empty console when
+# it's absent). Run after cloning if you want the advanced console embedded.
 #
 # Run this whenever the mesh-llm crates are bumped (`cargo update -p
 # mesh-llm-sdk` etc.). It re-copies lib.rs/build.rs, rebuilds dist/, and
@@ -51,4 +52,4 @@ if [ "$UPSTREAM_VERSION" != "$VENDORED_VERSION" ]; then
   echo "Update the version in vendor/mesh-llm-ui/Cargo.toml to match, then run cargo check."
 fi
 
-echo "Done. Review + commit vendor/mesh-llm-ui."
+echo "Done. dist/ is gitignored — no commit needed (rerun after mesh-llm bumps)."

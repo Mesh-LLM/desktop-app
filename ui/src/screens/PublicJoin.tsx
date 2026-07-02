@@ -11,8 +11,9 @@ interface PublicJoinProps {
 
 /**
  * The fork after choosing the global mesh: connect as a chat-only client, or
- * contribute this Mac's power by serving a model. Both stay end-to-end
- * encrypted — the copy leans on that.
+ * contribute this Mac's power by serving a model. Copy is honest: transport is
+ * end-to-end encrypted, but global-mesh models run on strangers' machines —
+ * the private-mesh flow is the recommendation for sensitive use.
  */
 export default function PublicJoin({ onBack, onPassive, onContribute }: PublicJoinProps) {
   const [mode, setMode] = useState<'passive' | 'contribute'>('passive')
@@ -63,8 +64,9 @@ export default function PublicJoin({ onBack, onPassive, onContribute }: PublicJo
       </div>
 
       <div className="max-w-xl text-center text-[13px] text-ink-faint">
-        Either way, there&rsquo;s no account and no cloud in the middle. Your prompts and any model
-        you run travel only over end-to-end encrypted connections between machines in the mesh.
+        No account, no cloud in the middle — connections are end-to-end encrypted. But global-mesh
+        models run on machines other people own, so treat it as a shared space: for private
+        conversations, start your own mesh and invite your people.
       </div>
 
       <Button

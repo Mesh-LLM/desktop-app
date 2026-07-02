@@ -5,9 +5,10 @@ import { useApp } from '../lib/store'
 import type { CatalogEntry, DownloadProgress, Phase } from '../lib/types'
 
 const GLOBAL_MESH_LINES = [
-  'You’re joining machines around the world — end-to-end encrypted.',
+  'You’re joining machines around the world — end-to-end encrypted in transit.',
   'No account. No cloud in the middle. Just meshed machines.',
-  'Your prompts travel only over encrypted connections between mesh machines.',
+  'Heads up: global-mesh models run on machines other people own.',
+  'Want it fully private? Start your own mesh and invite your people.',
   'Add this Mac’s power any time — every model makes the mesh stronger.',
 ]
 

@@ -56,11 +56,15 @@ export default function Main({ onLeave, onStartSharing }: MainProps) {
         const meshAdvertised = data.some((m) => m.id === 'mesh')
         const list = [
           { id: 'auto', label: '✨ Auto (best fit)', local: false },
-          ...(meshAdvertised ? [{ id: 'mesh', label: '🧬 Mixture (all models)', local: false }] : []),
+          ...(meshAdvertised
+            ? [{ id: 'mesh', label: '🧬 Mixture (all models)', local: false }]
+            : []),
           ...real.map((m) => ({
             id: m.id,
             label: m.display_name && m.display_name !== m.id ? m.display_name : shortModel(m.id),
-            local: [...serving].some((s) => s.includes(m.id) || m.id.includes(s.split('@')[0] ?? s)),
+            local: [...serving].some(
+              (s) => s.includes(m.id) || m.id.includes(s.split('@')[0] ?? s),
+            ),
           })),
         ]
         setModels(list)

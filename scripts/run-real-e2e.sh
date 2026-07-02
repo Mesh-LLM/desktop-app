@@ -12,9 +12,13 @@ if [[ ! -x "$BIN" ]]; then
 fi
 
 OUT="$(mktemp)"
+# Hermetic goose state: the embedded agent must not touch a real goose
+# install (or an earlier run's sessions). The joiner spec makes its own dir.
+export GOOSE_PATH_ROOT="$(mktemp -d)"
+export GOOSE_DISABLE_KEYRING=1
 "$BIN" --app-port 0 --api-port 0 --console-port 0 >"$OUT" 2>/dev/null &
 DAEMON_PID=$!
-trap 'kill $DAEMON_PID 2>/dev/null || true' EXIT
+trap 'kill $DAEMON_PID 2>/dev/null || true; rm -rf "$GOOSE_PATH_ROOT"' EXIT
 
 # Wait for the port handshake line
 for _ in $(seq 1 50); do

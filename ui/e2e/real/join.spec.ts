@@ -1,6 +1,10 @@
 import { type ChildProcess, spawn } from 'node:child_process'
 import { once } from 'node:events'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
+import { ensureHostRunning } from './support'
 
 /**
  * Two real machines in miniature: the primary backend hosts a mesh; this spec
@@ -9,8 +13,6 @@ import { expect, test } from '@playwright/test'
  * across the iroh tunnel to the host's model.
  */
 
-const TINY_MODEL = 'Qwen3-0.6B-Q4_K_M'
-
 let joiner: ChildProcess | null = null
 let joinerUrl: string | null = null
 
@@ -18,29 +20,14 @@ test.afterAll(() => {
   joiner?.kill()
 })
 
-async function ensureHostRunning(baseURL: string): Promise<void> {
-  const state = await (await fetch(`${baseURL}/app/state`)).json()
-  if (state.phase === 'running') return
-  if (state.phase === 'idle' || state.phase === 'error') {
-    await fetch(`${baseURL}/app/host`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model: TINY_MODEL, visibility: 'private', mesh_name: null }),
-    })
-  }
-  await expect
-    .poll(async () => (await (await fetch(`${baseURL}/app/state`)).json()).phase, {
-      timeout: 360_000,
-      intervals: [2000],
-    })
-    .toBe('running')
-}
-
 async function spawnJoiner(): Promise<string> {
   const bin = process.env.MESH_CONSOLED_BIN
   if (!bin) test.skip(true, 'MESH_CONSOLED_BIN not set (run via scripts/run-real-e2e.sh)')
   joiner = spawn(bin!, ['--app-port', '0', '--api-port', '0', '--console-port', '0'], {
     stdio: ['ignore', 'pipe', 'ignore'],
+    // Each daemon gets its own goose state dir — sharing one risks
+    // session-store contention between the two processes.
+    env: { ...process.env, GOOSE_PATH_ROOT: mkdtempSync(join(tmpdir(), 'goose-joiner-')) },
   })
   const [chunk] = (await once(joiner.stdout!, 'data')) as [Buffer]
   const handshake = JSON.parse(chunk.toString().split('\n')[0])
@@ -86,12 +73,27 @@ test('a second instance joins via the invite token and chats over the mesh', asy
 
   // Chat from the joiner routes over iroh to the host's model
   await expect(page.getByTestId('model-picker')).not.toHaveValue('', { timeout: 60_000 })
-  await page.getByTestId('chat-input').fill('Say the word mesh.')
+  await page
+    .getByTestId('chat-input')
+    .fill('Reply with the single word: mesh. Do not use any tools.')
   await page.getByTestId('chat-send').click()
 
-  const answer = page.getByTestId('assistant-message').last().getByTestId('assistant-text')
+  // The property under test is that tokens stream back from the HOST's model
+  // over iroh. The tiny model may spend them on visible text, on <think>
+  // reasoning (folded away), or on a tool call — any of those proves routing.
+  const bubble = page.getByTestId('assistant-message').last()
   await expect
-    .poll(async () => ((await answer.textContent()) ?? '').length, { timeout: 120_000 })
-    .toBeGreaterThan(3)
+    .poll(
+      async () => {
+        const text = (await bubble.getByTestId('assistant-text').textContent()) ?? ''
+        if (text.trim().length > 3) return 'text'
+        if (await bubble.getByTestId('thinking-toggle').isVisible()) return 'thinking'
+        if (await bubble.getByTestId('tool-chip').first().isVisible()) return 'tool'
+        return ''
+      },
+      { timeout: 180_000, intervals: [2000] },
+    )
+    .not.toBe('')
+  const answer = bubble.getByTestId('assistant-text')
   console.log('joiner got:', ((await answer.textContent()) ?? '').slice(0, 120))
 })

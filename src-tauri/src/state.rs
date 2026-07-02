@@ -50,6 +50,8 @@ pub struct Ports {
 pub struct AppState {
     pub phase: RwLock<Phase>,
     pub node: Mutex<Option<mesh_llm_sdk::MeshNode>>,
+    /// Embedded goose agent, created lazily on the first chat turn.
+    pub agent: Mutex<Option<crate::agent::AgentHandle>>,
     pub events: broadcast::Sender<AppEvent>,
     pub ports: Ports,
     pub http: reqwest::Client,
@@ -61,6 +63,7 @@ impl AppState {
         Arc::new(Self {
             phase: RwLock::new(Phase::Idle),
             node: Mutex::new(None),
+            agent: Mutex::new(None),
             events,
             ports,
             http: reqwest::Client::new(),

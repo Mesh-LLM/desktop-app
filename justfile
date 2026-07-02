@@ -1,5 +1,5 @@
 # Mesh desktop — everything a dev needs to try it out.
-# node + just are pinned via hermit in ./bin; Rust comes from your rustup (≥1.85).
+# node + just are pinned via hermit in ./bin; Rust comes from your rustup (≥1.91.1).
 
 export PATH := justfile_directory() + "/bin:" + env_var('PATH')
 

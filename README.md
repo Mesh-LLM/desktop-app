@@ -11,8 +11,11 @@ non-technical people:
   (or scan it, someday) and join in one step.
 - **Join a mesh**: paste an invite code, choose "just chat" or "share this
   Mac's power", done.
-- **Chat**: a streaming chat with a model picker across every model on the
-  mesh. All traffic tunnels over encrypted iroh QUIC — no cloud in between.
+- **Chat with an actual agent**: chat turns run through an embedded
+  [goose](https://github.com/aaif-goose/goose) agent (default toolset: shell +
+  file tools, web fetch, documents) against models on your mesh, with a model
+  picker across every model. Tool activity shows live in the chat. All
+  traffic tunnels over encrypted iroh QUIC — no cloud in between.
 
 ## Architecture
 
@@ -22,9 +25,13 @@ non-technical people:
 │                                                                         │
 │  mesh-console backend (axum, src-tauri/src/)                            │
 │  ├── /app/*     lifecycle API: diagnose, host, join, invite, events SSE │
+│  ├── /app/chat  the embedded goose agent, streamed as SSE               │
 │  ├── /api/*  ┐  streaming reverse proxy to the embedded node            │
 │  ├── /v1/*   ┘  (management :3131 / OpenAI :9337)                       │
 │  └── /          the React UI (ui/dist via rust-embed)                   │
+│                                                                         │
+│  embedded goose agent (Agent + developer/computercontroller tools)      │
+│  └── OpenAI provider → the node's /v1 on loopback                       │
 │                                                                         │
 │  embedded mesh-llm node (mesh-llm-sdk MeshNode, host-runtime daemon)    │
 │  └── iroh QUIC mesh ⇄ peers                                             │
@@ -47,8 +54,8 @@ for downloads, and the embedded `MeshNode` daemon for serve/join/publish.
 ## Try it (devs)
 
 Tools are pinned via [hermit](./bin) — `node` and `just` come from `./bin`, so
-either put `./bin` on your PATH or prefix commands with `bin/`. Rust ≥1.85 via
-rustup.
+either put `./bin` on your PATH or prefix commands with `bin/`. Rust ≥1.91.1
+via rustup (the goose crates set the floor).
 
 ```bash
 bin/just setup      # one-time: UI deps + Playwright browser
@@ -65,7 +72,7 @@ just fmt            # rustfmt + prettier
 just lint           # clippy -D warnings + eslint + tsc
 just test           # Rust unit tests
 just test-e2e       # mocked Playwright suite (fast)
-just test-e2e-real  # real end-to-end: real node, real model, real chat
+just test-e2e-real  # real end-to-end: real node, real model, real agent + tool use
 just check          # the full pre-PR gate (fmt-check + lint + test + test-e2e)
 just bundle         # package Mesh.app (ad-hoc signed)
 ```
@@ -105,3 +112,32 @@ Metal native runtime into the shared HF/mesh-llm caches.
   itself.
 - The `mesh-client` directory is package `mesh-llm-client` with lib name
   `mesh_client`.
+- **goose's builtin-MCP registry starts empty for embedders.** Builtin
+  extensions like `computercontroller` resolve via a global registry the
+  *host app* must seed with
+  `register_builtin_extensions(goose_mcp::BUILTIN_EXTENSIONS.clone())` (the
+  goose CLI does the same at startup) — otherwise `add_extension` fails with
+  "Unknown extension". Platform extensions (`developer`) don't need this. See
+  `src-tauri/src/agent.rs`.
+- **rmcp and rmcp-macros are Cargo.lock-pinned at 1.7.0.** goose rev
+  `31bc265a` doesn't compile against rmcp 1.8 (`peer_info()` signature
+  change), and rmcp-macros must match rmcp exactly — 1.8 macros expand to
+  calls that don't exist in 1.7 (`schema_for_input`). A plain `cargo update`
+  will break the build; re-pin with `cargo update -p rmcp -p rmcp-macros
+  --precise 1.7.0`. Likewise `idna_adapter` is pinned at 1.2.1: goose pins
+  `icu_locale =2.1.1`, which conflicts with the icu 2.2 stack that
+  idna_adapter 1.2.2 drags in.
+- **Don't name the goose provider "openai".** goose keys provider-default
+  behavior on the provider *name*: with `"openai"` it routes lightweight aux
+  calls (session naming, compaction) to a default "fast model" —
+  `gpt-4o-mini` — which doesn't exist on the mesh, so every aux call burned
+  3 retries with multi-second backoffs on 404 before falling back (visible
+  as slow responses). With an unknown name (`"mesh"`), the fast model
+  resolves to the main model directly. `GOOSE_FAST_MODEL` would also
+  override it, but the name fix tracks live model switches for free.
+- **The agent's state is rooted at `GOOSE_PATH_ROOT`** (defaults to
+  `~/Library/Application Support/mesh-console/goose` via
+  `init_process_defaults()`), so the embedded agent never touches a real
+  goose install. Test harnesses point it at temp dirs. The goose session
+  (conversation history) lives for one mesh run: `agent::teardown` on
+  shutdown/reset gives the next launch a fresh session.

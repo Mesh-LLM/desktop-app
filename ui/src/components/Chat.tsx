@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { streamChat } from '../lib/api'
-import type { ChatMessage } from '../lib/types'
+import type { ChatMessage, ChatToolCall } from '../lib/types'
 
 const STARTERS = [
   'Plan a week of dinners',
@@ -39,6 +39,8 @@ export default function Chat({
   const abortRef = useRef<AbortController | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const rawRef = useRef('')
+  // Reasoning streamed as separate reasoning deltas (vs inline <think> tags).
+  const thinkingRef = useRef('')
   const idSeq = useRef(0)
 
   useEffect(() => {
@@ -55,31 +57,59 @@ export default function Chat({
     setInput('')
     const userMsg: ChatMessage = { id: `u-${++idSeq.current}`, role: 'user', text: prompt }
     const asstId = `a-${++idSeq.current}`
-    const history = [...messages, userMsg]
-    setMessages([...history, { id: asstId, role: 'assistant', text: '', streaming: true }])
+    setMessages([
+      ...messages,
+      userMsg,
+      { id: asstId, role: 'assistant', text: '', streaming: true },
+    ])
     setStreaming(true)
     rawRef.current = ''
+    thinkingRef.current = ''
 
     const update = (patch: Partial<ChatMessage>) =>
       setMessages((msgs) => msgs.map((m) => (m.id === asstId ? { ...m, ...patch } : m)))
+    const updateTool = (id: string, patch: Partial<ChatToolCall>) =>
+      setMessages((msgs) =>
+        msgs.map((m) =>
+          m.id === asstId
+            ? { ...m, toolCalls: m.toolCalls?.map((t) => (t.id === id ? { ...t, ...patch } : t)) }
+            : m,
+        ),
+      )
 
     const abort = new AbortController()
     abortRef.current = abort
     try {
+      // The agent owns the conversation history — send only the new message.
       await streamChat(
         selectedModel,
-        history.map((m) => ({ role: m.role, content: m.text })),
+        prompt,
         {
           onDelta: (delta) => {
             rawRef.current += delta
             const { thinking, answer } = splitThinking(rawRef.current)
-            update({ text: answer, thinking })
+            update({ text: answer, thinking: thinkingRef.current + thinking })
           },
           onReasoningDelta: (delta) => {
+            thinkingRef.current += delta
             update({
-              thinking: (rawRef.current ? splitThinking(rawRef.current).thinking : '') + delta,
+              thinking:
+                thinkingRef.current +
+                (rawRef.current ? splitThinking(rawRef.current).thinking : ''),
             })
           },
+          onToolCall: (tool) =>
+            setMessages((msgs) =>
+              msgs.map((m) =>
+                m.id === asstId
+                  ? {
+                      ...m,
+                      toolCalls: [...(m.toolCalls ?? []), { ...tool, status: 'running' as const }],
+                    }
+                  : m,
+              ),
+            ),
+          onToolResult: ({ id, ok }) => updateTool(id, { status: ok ? 'done' : 'failed' }),
           onCompleted: (info) => update({ completed: info, streaming: false }),
           onError: (message) => update({ error: message, streaming: false }),
         },
@@ -221,6 +251,12 @@ export default function Chat({
   )
 }
 
+/** goose namespaces tool names as `extension__tool`; show just the tool. */
+function toolDisplayName(name: string): string {
+  const idx = name.lastIndexOf('__')
+  return idx === -1 ? name : name.slice(idx + 2)
+}
+
 function AssistantBubble({
   msg,
   modelLabel,
@@ -231,6 +267,15 @@ function AssistantBubble({
   hostname?: string
 }) {
   const [showThinking, setShowThinking] = useState(false)
+  // Nothing visible yet and no tool mid-flight: the model is warming up or
+  // prefilling (can be minutes for a cold big model — KV cache allocation).
+  // Show shimmering feedback instead of a dead bubble.
+  const waiting =
+    Boolean(msg.streaming) &&
+    !msg.text &&
+    !msg.thinking &&
+    !msg.error &&
+    !msg.toolCalls?.some((t) => t.status === 'running')
   const tokPerSec = (() => {
     const out = msg.completed?.usage?.output_tokens
     const ms = msg.completed?.timings?.decode_time_ms
@@ -248,14 +293,44 @@ function AssistantBubble({
         {modelLabel ?? 'model'}
         {servedBy ? ` · via ${servedBy === hostname ? 'this Mac' : servedBy}` : ''}
       </div>
+      {msg.toolCalls && msg.toolCalls.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {msg.toolCalls.map((t) => (
+            <span
+              key={t.id}
+              data-testid="tool-chip"
+              data-status={t.status}
+              className={`inline-flex items-center gap-1 rounded-full border border-edge bg-inset px-2.5 py-0.5 font-mono text-[11px] ${
+                t.status === 'running'
+                  ? 'animate-pulse text-ink-muted'
+                  : t.status === 'failed'
+                    ? 'text-bad'
+                    : 'text-ink-faint'
+              }`}
+              title={t.name}
+            >
+              {t.status === 'running' ? '⚙' : t.status === 'failed' ? '✕' : '✓'}{' '}
+              {toolDisplayName(t.name)}
+            </span>
+          ))}
+        </div>
+      )}
       {msg.thinking && (
         <button
           onClick={() => setShowThinking((s) => !s)}
           className="mb-2 text-[12px] text-ink-faint italic hover:text-ink-muted"
           data-testid="thinking-toggle"
         >
-          {showThinking ? '▾ thinking' : '▸ thinking…'}
+          {/* Shimmer while the turn is still running: reasoning is progress. */}
+          <span className={msg.streaming ? 'text-shimmer' : ''}>
+            {showThinking ? '▾ thinking' : '▸ thinking…'}
+          </span>
         </button>
+      )}
+      {waiting && (
+        <p className="text-shimmer text-[14px]" data-testid="assistant-waiting">
+          thinking…
+        </p>
       )}
       {msg.thinking && showThinking && (
         <p className="mb-3 border-l-2 border-edge pl-3 text-[13px] whitespace-pre-wrap text-ink-faint">
@@ -264,7 +339,7 @@ function AssistantBubble({
       )}
       <div className="prose-mesh text-[15px] leading-relaxed" data-testid="assistant-text">
         <ReactMarkdown>{msg.text}</ReactMarkdown>
-        {msg.streaming && <span className="animate-pulse font-mono">▍</span>}
+        {msg.streaming && msg.text && <span className="animate-pulse font-mono">▍</span>}
       </div>
       {msg.error && <p className="mt-2 text-[13px] text-bad">{msg.error}</p>}
       {tokPerSec !== null && (

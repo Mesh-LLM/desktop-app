@@ -108,6 +108,7 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
       phase: (opts.startRunning ? RUNNING_PHASE : { phase: 'idle' }) as Json,
       hostCalls: [] as Json[],
       joinCalls: [] as Json[],
+      chatCalls: [] as Json[],
     }
 
     // ---- EventSource mock ----
@@ -192,6 +193,9 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
       const stream = new ReadableStream({
         async start(controller) {
           const enc = new TextEncoder()
+          // Mimic real TTFT: a beat of silence before the first frame, so the
+          // UI's "thinking…" waiting shimmer has an assertable window.
+          await sleep(300)
           for (const frame of frames) {
             controller.enqueue(enc.encode(frame))
             await sleep(40)
@@ -205,7 +209,18 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
       })
     }
 
+    // Mirrors the real /app/chat contract: an agent turn with a tool call,
+    // <think>-tagged deltas, and a completed frame WITHOUT served_by/timings
+    // (the client computes timing fallbacks itself).
     const chatFrames = () => {
+      const frame = (event: string, payload: Json) =>
+        `event: ${event}\ndata: ${JSON.stringify({ type: event, ...payload })}\n\n`
+      const frames = [
+        frame('response.tool_call', {
+          id: 't1',
+          name: 'computercontroller__web_scrape',
+        }),
+      ]
       const deltas = [
         '<think>',
         'pondering the mesh',
@@ -216,23 +231,15 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
         ' mesh',
         '.',
       ]
-      const frames = deltas.map(
-        (d) =>
-          `event: response.output_text.delta\ndata: ${JSON.stringify({
-            type: 'response.output_text.delta',
-            delta: d,
-          })}\n\n`,
-      )
+      frames.push(...deltas.map((d) => frame('response.output_text.delta', { delta: d })))
       frames.push(
-        `event: response.completed\ndata: ${JSON.stringify({
-          type: 'response.completed',
+        frame('response.tool_result', { id: 't1', ok: true }),
+        frame('response.completed', {
           response: {
             model: MODEL_ID,
-            served_by: 'test-mac.local',
             usage: { input_tokens: 12, output_tokens: 40 },
-            timings: { ttft_ms: 80, decode_time_ms: 1000, total_time_ms: 1100 },
           },
-        })}\n\n`,
+        }),
         'data: [DONE]\n\n',
       )
       return frames
@@ -278,7 +285,10 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
       if (path === '/api/models') return json({ mesh_models: [] })
       if (path === '/v1/models')
         return json({ data: [{ id: MODEL_ID, display_name: 'Qwen3-0.6B-Q4_K_M' }] })
-      if (path === '/api/responses') return sseResponse(chatFrames())
+      if (path === '/app/chat') {
+        state.chatCalls.push(JSON.parse(String(init?.body ?? '{}')))
+        return sseResponse(chatFrames())
+      }
 
       return realFetch(input as RequestInfo, init)
     }

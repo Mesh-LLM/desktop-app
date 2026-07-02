@@ -10,9 +10,22 @@ test('welcome screen offers the join/host fork with the privacy line', async ({ 
   await expect(page.getByText('Your own AI. On your own machines.')).toBeVisible()
   await expect(page.getByTestId('welcome-join')).toBeVisible()
   await expect(page.getByTestId('welcome-host')).toBeVisible()
+  await expect(page.getByTestId('welcome-public')).toBeVisible()
   await expect(
     page.getByText('Everything stays between your devices — end-to-end encrypted.'),
   ).toBeVisible()
+})
+
+test('public mesh card joins with no token and share on, straight to progress', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await page.getByTestId('welcome-public').click()
+  // One-click: no token, no model, CLIENT mode — instant chat, no download.
+  const joinCalls = await page.evaluate(
+    () => (window as unknown as { __mockState: { joinCalls: unknown[] } }).__mockState.joinCalls,
+  )
+  expect(joinCalls).toEqual([{ public: true, share: false }])
 })
 
 test('host flow: scan → reveal → visibility → progress → mesh live with QR → main window', async ({

@@ -14,20 +14,12 @@ pub mod state;
 /// Call before spawning any threads.
 pub fn init_process_defaults() {
     // Force classic HTTP model downloads unless the user opted back in: xet's
-    // many-way chunked CAS protocol stalls behind corporate proxies where a
-    // plain CDN GET runs at line speed (observed 150KB/s vs 14MB/s on the
-    // same office network). Honored by our patched hf-hub fork (../hf-hub).
+    // chunked CAS protocol stalls on some networks (~150KB/s and frozen vs
+    // ~14MB/s plain CDN GET). Honored by our hf-hub fork branch (git [patch]).
+    // Multi-GB layer downloads need this. HF_HUB_DISABLE_XET=0 re-enables xet.
     if std::env::var_os("HF_HUB_DISABLE_XET").is_none() {
         // Safety: called from main before any other threads exist.
         unsafe { std::env::set_var("HF_HUB_DISABLE_XET", "1") };
-    }
-    // Chunked-parallel model downloads (patched fork): office networks shape
-    // long-lived flows hard (single stream: 15MB/s burst → stalled dead by
-    // ~350MB; 4 short-lived range GETs: 25MB/s sustained). 96MB chunks keep
-    // every connection inside the fast phase.
-    if std::env::var_os("HF_HUB_PARALLEL_DOWNLOAD").is_none() {
-        // Safety: called from main before any other threads exist.
-        unsafe { std::env::set_var("HF_HUB_PARALLEL_DOWNLOAD", "4") };
     }
 
     // Root the embedded goose agent's config/session state in our own app dir

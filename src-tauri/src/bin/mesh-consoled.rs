@@ -34,7 +34,11 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let runtime = tokio::runtime::Runtime::new()?;
+    // 8MB worker stacks — same rationale as main.rs (deep mesh-llm futures).
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(8 * 1024 * 1024)
+        .build()?;
     runtime.block_on(run(args))
 }
 

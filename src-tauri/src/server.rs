@@ -86,7 +86,7 @@ async fn app_join(
     State(state): State<Arc<AppState>>,
     Json(req): Json<node::JoinRequest>,
 ) -> Response {
-    if req.token.trim().is_empty() {
+    if !req.public && req.token.trim().is_empty() {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({ "error": "empty_token" })),

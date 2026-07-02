@@ -6,9 +6,10 @@ import { looksLikeInviteToken } from '../lib/api'
 interface WelcomeProps {
   onJoin: (prefillToken?: string) => void
   onHost: () => void
+  onPublic: () => void
 }
 
-export default function Welcome({ onJoin, onHost }: WelcomeProps) {
+export default function Welcome({ onJoin, onHost, onPublic }: WelcomeProps) {
   const [clipboardToken, setClipboardToken] = useState<string | null>(null)
 
   useEffect(() => {
@@ -77,6 +78,17 @@ export default function Welcome({ onJoin, onHost }: WelcomeProps) {
             </div>
           </Card>
         </div>
+
+        <Card data-testid="welcome-public" onClick={onPublic} className="w-full">
+          <div className="text-[17px] font-semibold">Try the public mesh</div>
+          <p className="mt-2 text-sm text-ink-muted">
+            No invite needed — join a shared community mesh and start chatting in seconds,
+            using models others contribute. No download.
+          </p>
+          <div className="mt-4 text-right text-accent" aria-hidden>
+            &rarr;
+          </div>
+        </Card>
 
         <ReassuranceLine />
       </div>

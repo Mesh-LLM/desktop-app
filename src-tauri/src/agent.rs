@@ -119,15 +119,29 @@ pub async fn ensure_agent(state: &Arc<AppState>, model: &str) -> anyhow::Result<
         .await
         .map_err(|e| anyhow::anyhow!("set provider: {e:#}"))?;
 
-    // The goose default toolset: developer (shell + files) and
-    // computercontroller (web_scrape, documents, automations).
-    for (name, description) in [
-        ("developer", "Developer tools (shell and files)"),
-        (
-            "computercontroller",
-            "Web fetch, documents, and automations",
-        ),
-    ] {
+    // Skills (Platform extension, in-core — no goose-mcp needed): discovers and
+    // provides skill instructions. Same as mesh-app, keeping the two in parity.
+    agent
+        .add_extension(
+            ExtensionConfig::Platform {
+                name: "skills".to_string(),
+                description: "Discover and provide skill instructions from filesystem and builtins"
+                    .to_string(),
+                display_name: Some("Skills".to_string()),
+                bundled: Some(true),
+                available_tools: Vec::new(),
+            },
+            &session.id,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("add skills extension: {e:#}"))?;
+
+    // Lean toolset (parity with mesh-app): developer (shell + files) only.
+    // computercontroller was dropped 2026-07-02 to match mesh-app's toolset;
+    // fewer tool schemas is also gentler on small models. Skills covers the gap.
+    // (Note: unlike mesh-app, chat turns run with max_turns=Some(10) — see
+    // server.rs — so runaway tool loops stop with a "continue?" message.)
+    for (name, description) in [("developer", "Developer tools (shell and files)")] {
         agent
             .add_extension(
                 ExtensionConfig::Builtin {

@@ -8,8 +8,13 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('chat streams a reply with thinking folded away and a tok/s stamp', async ({ page }) => {
-  // Model picker populated from /v1/models
-  await expect(page.getByTestId('model-picker')).toHaveValue('unsloth/Qwen3-0.6B-GGUF:Q4_K_M')
+  // Model picker defaults to the smart virtual ref: solo/private mesh → "auto"
+  // (mesh routes to best fit; MoA "mesh" needs ≥2 models). The real model is
+  // still listed for explicit pinning.
+  await expect(page.getByTestId('model-picker')).toHaveValue('auto')
+  await expect(
+    page.getByTestId('model-picker').locator('option[value="unsloth/Qwen3-0.6B-GGUF:Q4_K_M"]'),
+  ).toHaveCount(1)
 
   // Empty state with starter chips
   await expect(page.getByText('Say hello.')).toBeVisible()
@@ -45,7 +50,7 @@ test('chat streams a reply with thinking folded away and a tok/s stamp', async (
     () => (window as unknown as { __mockState: { chatCalls: unknown[] } }).__mockState.chatCalls,
   )
   expect(chatCalls).toEqual([
-    { model: 'unsloth/Qwen3-0.6B-GGUF:Q4_K_M', text: 'Say hello from the mesh' },
+    { model: 'auto', text: 'Say hello from the mesh' },
   ])
 })
 

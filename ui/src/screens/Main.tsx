@@ -31,6 +31,11 @@ export default function Main({ onLeave }: MainProps) {
     info?.mesh_name ?? (hostname ? `${hostname.replace(/\.local$/, '')}'s mesh` : 'Your mesh')
 
   // Model list: /v1/models has chat-ready ids that propagate across the mesh.
+  // Virtual refs (mesh-app's ladder, validated there in tests/model_selection.rs):
+  //   "auto" — mesh routes each request to the best-fit model; works with 1+.
+  //   "mesh" — Mixture-of-Agents fan-out; the mesh 503s below 2 real models,
+  //            and only advertises the "mesh" id itself once ≥2 exist.
+  // Smart default: public mesh or ≥3 real models → "mesh", else "auto".
   useEffect(() => {
     let cancelled = false
     const load = async () => {
@@ -38,13 +43,20 @@ export default function Main({ onLeave }: MainProps) {
         const { data } = await nodeApi.models()
         if (cancelled) return
         const serving = new Set(status?.serving_models ?? [])
-        const list = data.map((m) => ({
-          id: m.id,
-          label: m.display_name && m.display_name !== m.id ? m.display_name : shortModel(m.id),
-          local: [...serving].some((s) => s.includes(m.id) || m.id.includes(s.split('@')[0] ?? s)),
-        }))
+        const real = data.filter((m) => m.id !== 'mesh' && m.id !== 'auto')
+        const meshAdvertised = data.some((m) => m.id === 'mesh')
+        const list = [
+          { id: 'auto', label: '✨ Auto (best fit)', local: false },
+          ...(meshAdvertised ? [{ id: 'mesh', label: '🧬 Mixture (all models)', local: false }] : []),
+          ...real.map((m) => ({
+            id: m.id,
+            label: m.display_name && m.display_name !== m.id ? m.display_name : shortModel(m.id),
+            local: [...serving].some((s) => s.includes(m.id) || m.id.includes(s.split('@')[0] ?? s)),
+          })),
+        ]
         setModels(list)
-        setSelectedModel((sel) => sel ?? list[0]?.id ?? null)
+        const smart = (!isPrivate || real.length >= 3) && meshAdvertised ? 'mesh' : 'auto'
+        setSelectedModel((sel) => sel ?? smart)
       } catch {
         /* node restarting */
       }
@@ -55,7 +67,7 @@ export default function Main({ onLeave }: MainProps) {
       cancelled = true
       clearInterval(t)
     }
-  }, [status?.serving_models])
+  }, [status?.serving_models, isPrivate])
 
   // Peer-join toast + invite modal live line. setState happens inside timer
   // callbacks (never synchronously in the effect body) to avoid cascading

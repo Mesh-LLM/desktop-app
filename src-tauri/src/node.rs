@@ -7,6 +7,10 @@ use serde::Deserialize;
 use std::sync::Arc;
 use std::time::Duration;
 
+/// Tiny fast-start model (same default as mesh-app): ~500MB download, serves
+/// in seconds. Used when join-and-share is requested without an explicit model.
+pub const DEFAULT_MODEL: &str = "unsloth/Qwen3-0.6B-GGUF:Q4_K_M";
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct HostRequest {
     pub model: String,
@@ -17,7 +21,12 @@ pub struct HostRequest {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct JoinRequest {
+    /// Invite token for a private mesh. Ignored when `public` is set.
+    #[serde(default)]
     pub token: String,
+    /// true = join the public mesh (no token needed).
+    #[serde(default)]
+    pub public: bool,
     /// true = also serve a model on this machine ("share this Mac's power"),
     /// false = chat-only client.
     #[serde(default)]
@@ -91,8 +100,13 @@ async fn run_host(state: &Arc<AppState>, req: HostRequest) -> Result<()> {
     Ok(())
 }
 
-async fn run_join(state: &Arc<AppState>, req: JoinRequest) -> Result<()> {
+async fn run_join(state: &Arc<AppState>, mut req: JoinRequest) -> Result<()> {
     if req.share {
+        // Sharing needs a model to serve; default to the tiny fast-start one
+        // (same as mesh-app) so join-and-share never forces a model decision.
+        if req.model.is_none() {
+            req.model = Some(DEFAULT_MODEL.to_string());
+        }
         ensure_runtime(state).await?;
         if let Some(model) = &req.model {
             ensure_model(state, model).await?;
@@ -111,8 +125,12 @@ async fn run_join(state: &Arc<AppState>, req: JoinRequest) -> Result<()> {
     } else {
         MeshNode::builder().client()
     };
+    builder = if req.public {
+        builder.auto_join_public_mesh()
+    } else {
+        builder.join_token(req.token.trim())
+    };
     builder = builder
-        .join_token(req.token.trim())
         .api_port(state.ports.api)
         .console_port(state.ports.console)
         .startup_timeout(Duration::from_secs(180));

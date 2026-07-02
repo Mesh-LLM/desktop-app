@@ -16,7 +16,7 @@ type View =
   | { name: 'join-setup'; token: string } // power setup for join-and-share
   | { name: 'host-setup' }
   | { name: 'host-visibility'; model: string }
-  | { name: 'progress'; goal: 'host' | 'join' }
+  | { name: 'progress'; goal: 'host' | 'join' | 'public' }
   | { name: 'main' }
 
 export default function App() {
@@ -49,6 +49,12 @@ export default function App() {
         <Welcome
           onJoin={(prefillToken) => setView({ name: 'join', prefillToken })}
           onHost={() => setView({ name: 'host-setup' })}
+          onPublic={() => {
+            // Client mode: instant chat, no runtime/model download gating
+            // entry. Contributing on the public mesh is a later opt-in.
+            void appApi.joinPublic(false)
+            setView({ name: 'progress', goal: 'public' })
+          }}
         />
       )
 
@@ -117,6 +123,7 @@ export default function App() {
       }
       return (
         <Progress
+          publicMesh={view.goal === 'public'}
           onCancel={() => {
             void appApi.shutdown()
             setView({ name: 'welcome' })

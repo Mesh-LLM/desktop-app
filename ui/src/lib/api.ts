@@ -35,6 +35,14 @@ export const appApi = {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ token, share, model: model ?? null }),
     }).then((r) => json<{ ok: boolean }>(r)),
+  /** Join the public mesh (no invite token). share=true contributes compute
+   * with the backend's tiny default model — no model decision needed. */
+  joinPublic: (share: boolean) =>
+    fetch('/app/join', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ public: true, share }),
+    }).then((r) => json<{ ok: boolean }>(r)),
   invite: () => fetch('/app/invite').then((r) => json<{ token: string; approx_bytes: number }>(r)),
   shutdown: () => fetch('/app/shutdown', { method: 'POST' }).then((r) => json<{ ok: boolean }>(r)),
   reset: () => fetch('/app/reset', { method: 'POST' }).then((r) => json<{ ok: boolean }>(r)),

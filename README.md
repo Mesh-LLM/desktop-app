@@ -2,7 +2,9 @@
 
 A macOS desktop app (proof of concept) that makes sovereign, peer-to-peer AI —
 powered by the open-source [mesh-llm](../mesh-llm) project — usable by complete
-non-technical people:
+non-technical people. (Sibling project:
+[michaelneale/mesh-app](https://github.com/michaelneale/mesh-app), an
+alternative implementation we are WIP consolidating with.)
 
 - **Start your own mesh**: a built-in hardware check ("Checking your Mac…")
   detects your chip and AI memory and recommends a model that fits, downloads
@@ -82,25 +84,12 @@ Metal native runtime into the shared HF/mesh-llm caches.
 
 ### Gotchas
 
-- The workspace root `Cargo.toml` **must** carry a `[patch.crates-io] hf-hub`
-  entry — cargo ignores patches declared in dependencies' workspaces. Ours
-  points at a **local clone of the Mesh-LLM/hf-hub fork** (`../hf-hub`, branch
-  `mesh-console/disable-xet-env`: pinned upstream rev + one commit) that
-  honors `HF_HUB_DISABLE_XET`.
-- **Model downloads skip xet by default.** Xet's many-way chunked CAS
-  protocol stalls behind corporate proxies (observed ~150KB/s and frozen
-  progress vs ~14MB/s for a plain CDN GET on the same office network), so
-  `init_process_defaults()` sets `HF_HUB_DISABLE_XET=1` unless you exported
-  it yourself. `HF_HUB_DISABLE_XET=0 just backend` re-enables xet. The patch
-  is upstreamable to Mesh-LLM/hf-hub (matches Python huggingface_hub's env
-  contract).
-- **Model downloads are chunked-parallel by default** (fork feature,
-  `HF_HUB_PARALLEL_DOWNLOAD=4`). Office networks also shape plain long-lived
-  HTTP flows: a single CDN GET bursts to ~15MB/s, collapses to KB/s, and dies
-  around 350MB — while four parallel 100MB range requests sustain ~25MB/s on
-  the same link. Files ≥192MB are fetched as 96MB ranges written at offset;
-  measured through the app: a 4.4GB model downloaded + loaded + serving in
-  232s. Set `HF_HUB_PARALLEL_DOWNLOAD=0` for the single-stream path.
+- **Model downloads skip xet by default** (`HF_HUB_DISABLE_XET=1` set in
+  `init_process_defaults`): xet's chunked CAS protocol stalls on some networks
+  (~150KB/s frozen vs ~14MB/s plain GET). Honored by our hf-hub fork branch —
+  now a **git `[patch.crates-io]`** (`Mesh-LLM/hf-hub`,
+  `mesh-console/disable-xet-env`), so the repo builds anywhere; no sibling
+  checkout needed.
 - Byte-level download progress only flows through the `OutputSink` when the
   sink reports `ConsoleSessionMode::InteractiveDashboard` (otherwise the
   host-runtime draws ANSI bars on stderr) — see `ConsoleSink` in

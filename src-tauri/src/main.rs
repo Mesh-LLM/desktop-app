@@ -65,7 +65,14 @@ fn start_backend() -> (Arc<AppState>, u16) {
 
     let serve_state = state.clone();
     std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().expect("backend runtime");
+        // 8MB worker stacks: mesh-llm's join/start futures are deep and blow
+        // tokio's 2MB default under debug builds (guard-page SIGABRT observed
+        // on public join, 2026-07-02).
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .thread_stack_size(8 * 1024 * 1024)
+            .build()
+            .expect("backend runtime");
         rt.block_on(async move {
             let listener = tokio::net::TcpListener::bind(SocketAddr::from((
                 Ipv4Addr::LOCALHOST,

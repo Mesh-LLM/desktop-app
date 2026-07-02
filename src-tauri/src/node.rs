@@ -144,6 +144,9 @@ async fn run_join(state: &Arc<AppState>, req: JoinRequest) -> Result<()> {
 }
 
 pub async fn shutdown(state: &Arc<AppState>) -> Result<()> {
+    // Agent first: cancel any in-flight reply before its provider's node goes
+    // away, and guarantee the next mesh launch starts a fresh session.
+    crate::agent::teardown(state).await;
     if let Some(node) = state.node.lock().await.take() {
         node.shutdown().await.context("shutting down mesh node")?;
     }

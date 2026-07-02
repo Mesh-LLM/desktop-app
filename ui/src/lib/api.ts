@@ -63,31 +63,27 @@ export function looksLikeInviteToken(raw: string): boolean {
 export interface ChatStreamHandlers {
   onDelta: (text: string) => void
   onReasoningDelta?: (text: string) => void
+  onToolCall?: (tool: { id: string; name: string }) => void
+  onToolResult?: (tool: { id: string; ok: boolean }) => void
   onCompleted?: (info: ChatCompletedInfo) => void
   onError?: (message: string) => void
 }
 
 /**
- * Streams a chat turn through POST /api/responses (SSE). Returns when the
- * stream finishes. Parsing mirrors the mesh console's mesh-connection.ts.
+ * Streams one agent turn through POST /app/chat (SSE). The goose agent keeps
+ * the conversation history server-side, so only the new user message is sent.
+ * Returns when the stream finishes.
  */
 export async function streamChat(
   model: string,
-  input: Array<{ role: string; content: string }>,
+  text: string,
   handlers: ChatStreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
-  const resp = await fetch('/api/responses', {
+  const resp = await fetch('/app/chat', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      client_id: clientId(),
-      request_id: `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      input,
-      stream: true,
-      stream_options: { include_usage: true },
-    }),
+    body: JSON.stringify({ model, text }),
     signal,
   })
   if (!resp.ok || !resp.body) {
@@ -122,6 +118,16 @@ export async function streamChat(
       if (firstDeltaAt === null) firstDeltaAt = performance.now()
       lastDeltaAt = performance.now()
       handlers.onReasoningDelta?.((parsed.delta as string) ?? '')
+    } else if (type === 'response.tool_call') {
+      handlers.onToolCall?.({
+        id: (parsed.id as string) ?? '',
+        name: (parsed.name as string) ?? 'tool',
+      })
+    } else if (type === 'response.tool_result') {
+      handlers.onToolResult?.({
+        id: (parsed.id as string) ?? '',
+        ok: (parsed.ok as boolean) ?? true,
+      })
     } else if (type === 'response.completed') {
       const response = (parsed.response ?? {}) as Record<string, unknown>
       const fallbackTimings =
@@ -160,17 +166,6 @@ export async function streamChat(
       }
     }
   }
-}
-
-let cachedClientId: string | null = null
-function clientId(): string {
-  if (!cachedClientId) {
-    cachedClientId =
-      localStorage.getItem('mesh-client-id') ??
-      `mesh-desktop-${Math.random().toString(36).slice(2, 10)}`
-    localStorage.setItem('mesh-client-id', cachedClientId)
-  }
-  return cachedClientId
 }
 
 export function formatBytes(bytes: number): string {

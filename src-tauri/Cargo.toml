@@ -31,10 +31,27 @@ mesh-llm-system = { git = "https://github.com/Mesh-LLM/mesh-llm" }
 # package mesh-llm-client (dir crates/mesh-client), lib name mesh_client
 mesh-llm-client = { git = "https://github.com/Mesh-LLM/mesh-llm" }
 
+# goose agent embedded in-process. Same fork+rev as the proven mesh-app
+# reference; rustls-tls keeps a single TLS backend across the tree.
+goose = { git = "https://github.com/aaif-goose/goose", rev = "31bc265a", default-features = false, features = ["rustls-tls"] }
+goose-providers = { git = "https://github.com/aaif-goose/goose", rev = "31bc265a", default-features = false, features = ["rustls-tls"] }
+# Bundled MCP servers (computercontroller etc.). goose's builtin registry
+# starts EMPTY for embedders — see register_builtin_extensions in agent.rs.
+goose-mcp = { git = "https://github.com/aaif-goose/goose", rev = "31bc265a", default-features = false, features = ["rustls-tls"] }
+# Same rmcp as goose's tree (^1.4 → one unified version) for Role and the
+# tool-call param types used in agent event translation + tests.
+# Cargo.lock pins rmcp AND rmcp-macros at 1.7.0: goose rev 31bc265a does not
+# compile against rmcp 1.8 (peer_info() signature change), and rmcp-macros
+# must match rmcp exactly (1.8 macros emit calls 1.7 doesn't have). Don't let
+# `cargo update` bump either.
+rmcp = { version = "1.4", default-features = false }
+
 tauri = { version = "2", features = [] }
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
+tokio-util = "0.7"
+dirs = "6"
 futures-util = "0.3"
 mime_guess = "2"
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }

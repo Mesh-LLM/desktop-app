@@ -24,6 +24,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/app/host", post(app_host))
         .route("/app/join", post(app_join))
         .route("/app/invite", get(app_invite))
+        .route("/app/chat", post(app_chat))
         .route("/app/shutdown", post(app_shutdown))
         .route("/app/reset", post(app_reset))
         .route("/api/{*path}", any(proxy::proxy))
@@ -114,6 +115,82 @@ async fn app_invite(State(state): State<Arc<AppState>>) -> Response {
     }
 }
 
+#[derive(serde::Deserialize)]
+struct ChatRequest {
+    model: String,
+    text: String,
+}
+
+/// One agent chat turn, streamed as SSE. The goose agent owns the
+/// conversation history; the body carries only the new user message.
+async fn app_chat(State(state): State<Arc<AppState>>, Json(req): Json<ChatRequest>) -> Response {
+    use crate::agent::{self, Frame};
+    use goose::agents::SessionConfig;
+    use goose::conversation::message::Message;
+    use tokio_stream::wrappers::ReceiverStream;
+
+    if !matches!(state.phase().await, Phase::Running(_)) {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "error": "node_not_running" })),
+        )
+            .into_response();
+    }
+
+    let handle = match agent::ensure_agent(&state, &req.model).await {
+        Ok(handle) => handle,
+        Err(err) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": format!("{err:#}") })),
+            )
+                .into_response();
+        }
+    };
+
+    // One turn at a time: a concurrent reply on the same session would
+    // interleave its history. The owned guard rides in the streaming task.
+    let Ok(turn_guard) = handle.turn_lock.clone().try_lock_owned() else {
+        return (StatusCode::CONFLICT, Json(json!({ "error": "busy" }))).into_response();
+    };
+
+    let cancel = handle.cancel_root.child_token();
+    let (tx, rx) = tokio::sync::mpsc::channel::<Frame>(64);
+
+    // Drive the reply in its own task; the SSE body just drains the channel.
+    // If the client disconnects, the receiver drops, sends fail, translation
+    // returns, and we cancel the token so goose stops generating/tooling.
+    let task_cancel = cancel.clone();
+    tokio::spawn(async move {
+        let _turn = turn_guard;
+        let session_config = SessionConfig {
+            id: handle.session_id.clone(),
+            schedule_id: None,
+            max_turns: Some(10),
+            retry_config: None,
+        };
+        let user_message = Message::user().with_text(req.text);
+        match handle
+            .agent
+            .reply(user_message, session_config, Some(task_cancel.clone()))
+            .await
+        {
+            Ok(stream) => agent::translate_events(stream, tx).await,
+            Err(err) => {
+                let _ = tx.send(Frame::Error(format!("{err:#}"))).await;
+                let _ = tx.send(Frame::Done).await;
+            }
+        }
+        task_cancel.cancel();
+    });
+
+    Sse::new(
+        ReceiverStream::new(rx).map(|frame| Ok::<_, Infallible>(crate::agent::frame_to_sse(frame))),
+    )
+    .keep_alive(KeepAlive::default())
+    .into_response()
+}
+
 async fn app_shutdown(State(state): State<Arc<AppState>>) -> Response {
     match node::shutdown(&state).await {
         Ok(()) => Json(json!({ "ok": true })).into_response(),
@@ -126,6 +203,7 @@ async fn app_shutdown(State(state): State<Arc<AppState>>) -> Response {
 }
 
 async fn app_reset(State(state): State<Arc<AppState>>) -> Response {
+    crate::agent::teardown(&state).await;
     if matches!(state.phase().await, Phase::Error { .. }) {
         state.set_phase(Phase::Idle).await;
     }

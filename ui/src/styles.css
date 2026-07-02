@@ -29,6 +29,32 @@ body {
   user-select: none;
 }
 
+/* Work-in-progress text: a light band sweeping across dimmed text (the
+   classic "thinking…" shimmer). Falls back to plain faint text when
+   reduced motion is preferred (the media block below freezes animations). */
+@keyframes text-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.text-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-ink-faint) 35%,
+    var(--color-ink) 50%,
+    var(--color-ink-faint) 65%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: text-shimmer 2s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

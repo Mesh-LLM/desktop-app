@@ -109,7 +109,7 @@ export interface V1Model {
   display_name?: string
 }
 
-// ---- chat (OpenAI Responses over /api/responses) ----
+// ---- chat (goose agent turns over /app/chat, Responses-style SSE) ----
 
 export interface ChatTimings {
   ttft_ms?: number
@@ -129,11 +129,19 @@ export interface ChatCompletedInfo {
   timings?: ChatTimings
 }
 
+/** One agent tool invocation surfaced in the chat (e.g. web_scrape). */
+export interface ChatToolCall {
+  id: string
+  name: string
+  status: 'running' | 'done' | 'failed'
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   text: string
   thinking?: string
+  toolCalls?: ChatToolCall[]
   streaming?: boolean
   error?: string
   completed?: ChatCompletedInfo

@@ -2,6 +2,7 @@
 // default query depth when computing async fn layouts.
 #![recursion_limit = "256"]
 
+pub mod agent;
 pub mod diagnose;
 pub mod events;
 pub mod node;
@@ -27,6 +28,23 @@ pub fn init_process_defaults() {
     if std::env::var_os("HF_HUB_PARALLEL_DOWNLOAD").is_none() {
         // Safety: called from main before any other threads exist.
         unsafe { std::env::set_var("HF_HUB_PARALLEL_DOWNLOAD", "4") };
+    }
+
+    // Root the embedded goose agent's config/session state in our own app dir
+    // so it never touches a real goose install (~/Library/.../Block/goose).
+    // Tests point this at a temp dir for hermetic runs.
+    if std::env::var_os("GOOSE_PATH_ROOT").is_none() {
+        let root = dirs::data_dir()
+            .unwrap_or_else(std::env::temp_dir)
+            .join("mesh-console/goose");
+        // Safety: called from main before any other threads exist.
+        unsafe { std::env::set_var("GOOSE_PATH_ROOT", root) };
+    }
+    // No secrets are stored (the mesh api key is a constant); skip the macOS
+    // keychain so the app never triggers a keychain prompt.
+    if std::env::var_os("GOOSE_DISABLE_KEYRING").is_none() {
+        // Safety: called from main before any other threads exist.
+        unsafe { std::env::set_var("GOOSE_DISABLE_KEYRING", "1") };
     }
 
     tracing_subscriber::fmt()

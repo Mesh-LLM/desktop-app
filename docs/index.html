@@ -107,7 +107,7 @@
     position: relative;
     max-width: 1000px;
     margin: 0 auto;
-    padding: 9rem 2rem 5rem;
+    padding: 3rem 2rem 2.5rem;
     text-align: center;
   }
 
@@ -120,7 +120,7 @@
     font-size: .72rem;
     font-weight: 700;
     color: var(--sun);
-    margin-bottom: 2.2rem;
+    margin-bottom: 1.2rem;
   }
   .badge-row::before, .badge-row::after {
     content: "";
@@ -129,23 +129,10 @@
   }
   .badge-row::after { transform: scaleX(-1); }
 
-  .app-icon {
-    width: 108px; height: 108px;
-    margin-bottom: 1.6rem;
-    border-radius: 26px;
-    background: linear-gradient(160deg, #fdf3d9, var(--cream) 55%, #d9bd85);
-    padding: 14px;
-    box-shadow:
-      0 0 0 3px var(--ink),
-      0 0 0 6px var(--amber),
-      0 0 0 9px var(--ink),
-      0 22px 44px rgba(0,0,0,.55);
-  }
-
   /* chrome headline, ALT-1977 style */
   h1.wordmark {
     font-family: "Righteous", sans-serif;
-    font-size: clamp(4.2rem, 14vw, 9.5rem);
+    font-size: clamp(3.4rem, 10vw, 6.5rem);
     letter-spacing: .05em;
     line-height: .95;
     transform: skewX(-6deg);
@@ -160,11 +147,11 @@
       drop-shadow(2px 2px 0 var(--ink))
       drop-shadow(5px 5px 0 var(--red))
       drop-shadow(9px 9px 0 rgba(0,0,0,.45));
-    margin-bottom: 1.4rem;
+    margin-bottom: 1rem;
   }
 
   .tagline {
-    font-size: clamp(1.25rem, 3vw, 1.8rem);
+    font-size: clamp(1.1rem, 2.4vw, 1.45rem);
     font-weight: 700;
     letter-spacing: .12em;
     text-transform: uppercase;
@@ -178,11 +165,12 @@
     color: var(--gold);
   }
   .sub {
-    color: var(--cream);
-    opacity: .85;
-    letter-spacing: .06em;
-    max-width: 52ch;
-    margin: 0 auto 3rem;
+    color: #fdf3d9;
+    letter-spacing: .04em;
+    max-width: 56ch;
+    margin: 0 auto 1.8rem;
+    font-size: .95rem;
+    text-shadow: 1px 1px 3px rgba(0,0,0,.8);
   }
 
   /* ---- download button ---- */
@@ -192,13 +180,13 @@
     align-items: center;
     gap: .1rem;
     font-family: "Righteous", sans-serif;
-    font-size: 1.5rem;
+    font-size: 1.2rem;
     letter-spacing: .08em;
     text-transform: uppercase;
     text-decoration: none;
     color: var(--ink);
     background: linear-gradient(180deg, var(--sun), var(--gold) 45%, var(--amber));
-    padding: 1.1rem 3.2rem;
+    padding: .9rem 2.6rem;
     border-radius: 999px;
     border: 3px solid var(--ink);
     box-shadow:
@@ -226,7 +214,7 @@
   .dl:active { transform: translateY(8px); box-shadow: 0 0 0 3px var(--gold), 0 0 0 6px var(--ink), 0 2px 0 var(--ink); }
 
   .dl-note {
-    margin-top: 1.2rem;
+    margin-top: 1rem;
     font-size: .8rem;
     letter-spacing: .18em;
     text-transform: uppercase;
@@ -238,16 +226,16 @@
     font-size: .85rem;
     letter-spacing: .14em;
     text-transform: uppercase;
-    color: var(--cream);
-    opacity: .85;
-    margin: -1.4rem auto 2.4rem;
+    color: #fdf3d9;
+    text-shadow: 1px 1px 2px rgba(0,0,0,.7);
+    margin: -0.9rem auto 1.8rem;
     max-width: 48ch;
   }
 
   /* ---- horizontal stripe divider ---- */
   .stripes {
-    height: 26px;
-    margin: 4rem 0;
+    height: 20px;
+    margin: 1.6rem 0 2.4rem;
     background: linear-gradient(180deg,
       var(--rust)   0 20%,
       var(--red)   20% 40%,
@@ -271,7 +259,7 @@
     letter-spacing: .45em;
     text-transform: uppercase;
     color: var(--amber);
-    margin-bottom: 2rem;
+    margin-bottom: 1.2rem;
   }
 
   .tv {
@@ -433,7 +421,7 @@
   .tv::after  { right: 12%; transform: rotate(-8deg); }
 
   .tv-caption {
-    margin-top: 4.2rem;
+    margin-top: 3.2rem;
     font-size: .78rem;
     letter-spacing: .25em;
     text-transform: uppercase;
@@ -451,7 +439,7 @@
   .pitch {
     max-width: 980px;
     margin: 0 auto;
-    padding: 5rem 2rem 3rem;
+    padding: 3.4rem 2rem 1.6rem;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 1.6rem;
@@ -472,12 +460,12 @@
     margin-bottom: .7rem;
   }
   .card h3 span { color: var(--orange); margin-right: .5rem; }
-  .card p { font-size: .95rem; color: var(--cream); opacity: .9; }
+  .card p { font-size: .9rem; color: #fdf3d9; text-shadow: 1px 1px 2px rgba(0,0,0,.7); }
 
   /* =================== POWERED BY =================== */
   .powered {
     text-align: center;
-    padding: 4rem 2rem 5rem;
+    padding: 2rem 2rem 2.6rem;
   }
   .powered h2 {
     font-family: "Righteous", sans-serif;
@@ -485,7 +473,7 @@
     letter-spacing: .45em;
     text-transform: uppercase;
     color: var(--amber);
-    margin-bottom: 2.4rem;
+    margin-bottom: 1.6rem;
   }
   .powered-row {
     display: flex;
@@ -535,7 +523,7 @@
   /* =================== FOOTER =================== */
   footer {
     border-top: 2px solid rgba(242,176,46,.3);
-    padding: 2.4rem 2rem 3rem;
+    padding: 1.6rem 2rem 2rem;
     text-align: center;
     font-size: .8rem;
     letter-spacing: .2em;
@@ -548,9 +536,42 @@
   footer .fine { opacity: .55; letter-spacing: .12em; }
 
   @media (max-width: 640px) {
-    .hero { padding-top: 6rem; }
+    .hero { padding-top: 2.5rem; }
     .arcs { min-width: 640px; min-height: 640px; top: -70vw; right: -70vw; }
   }
+
+  /* ---- hi-fi groove toggle ---- */
+  .hifi {
+    position: fixed;
+    bottom: 18px; right: 18px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .55rem 1.1rem;
+    font-family: "Righteous", sans-serif;
+    font-size: .7rem;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--ink);
+    background: linear-gradient(180deg, var(--sun), var(--amber));
+    border: 2px solid var(--ink);
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow: 0 4px 0 var(--ink), 0 10px 24px rgba(0,0,0,.5);
+  }
+  .hifi:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+  .hifi .eq {
+    display: inline-flex; gap: 2px; align-items: flex-end; height: 12px;
+  }
+  .hifi .eq i {
+    width: 3px; background: var(--ink); border-radius: 1px;
+    height: 4px;
+  }
+  .hifi.playing .eq i { animation: eq .5s ease-in-out infinite alternate; }
+  .hifi.playing .eq i:nth-child(2) { animation-delay: .15s; }
+  .hifi.playing .eq i:nth-child(3) { animation-delay: .3s; }
+  @keyframes eq { from { height: 3px; } to { height: 12px; } }
 </style>
 </head>
 <body>
@@ -563,7 +584,6 @@
     <!-- HERO -->
     <header class="hero">
       <div class="badge-row">est. your living room</div><br>
-      <img class="app-icon" src="assets/mesh-app-icon.png" alt="Mesh app icon" width="108" height="108">
       <h1 class="wordmark">MESH</h1>
       <p class="tagline">Share compute with your friends —<br>hosting AI isn’t easy, so <em>do it together</em>.</p>
       <p class="sub">Mesh is a desktop app that pools GPUs across the machines you and your friends already own, and serves local models to your favourite agents. No cloud. No API keys. Just the mesh.</p>
@@ -642,6 +662,46 @@
 
   </div>
 </div>
+
+<audio id="groove" src="assets/groove.mp3" loop preload="auto"></audio>
+<button class="hifi" id="hifi" aria-label="Toggle music">
+  <span class="eq"><i></i><i></i><i></i></span>
+  <span id="hifi-label">Groove</span>
+</button>
+
+<script>
+(function () {
+  var audio = document.getElementById("groove");
+  var btn = document.getElementById("hifi");
+  var label = document.getElementById("hifi-label");
+  audio.volume = 0.55;
+
+  function ui(playing) {
+    btn.classList.toggle("playing", playing);
+    label.textContent = playing ? "Groovin’" : "Groove";
+  }
+
+  function play() { audio.play().then(function () { ui(true); }).catch(function () { ui(false); }); }
+
+  btn.addEventListener("click", function () {
+    if (audio.paused) play();
+    else { audio.pause(); ui(false); }
+  });
+
+  // try to autoplay; if the browser blocks it, start on first interaction
+  audio.play().then(function () { ui(true); }).catch(function () {
+    var kick = function () {
+      if (audio.paused) play();
+      ["pointerdown", "keydown", "touchstart"].forEach(function (ev) {
+        window.removeEventListener(ev, kick);
+      });
+    };
+    ["pointerdown", "keydown", "touchstart"].forEach(function (ev) {
+      window.addEventListener(ev, kick, { once: false });
+    });
+  });
+})();
+</script>
 
 <script>
 (function () {

@@ -117,6 +117,13 @@ untestable UI layer).
   agent so the next turn starts fresh (the old chat stays in goose's store,
   just no longer active). Surfaced as a quiet "New chat" link in the chat top
   bar. Distinct from `/app/reset` (leave-mesh / error recovery).
+- **Auto-compaction**: goose summarizes older turns once the conversation
+  fills a fraction of the model's context window. We fix that fraction at
+  **0.4** (goose default 0.8) via `GOOSE_AUTO_COMPACT_THRESHOLD` in
+  `init_process_defaults` — small mesh models have modest context and the one
+  long-lived session accretes history. It's env-only: the threshold isn't part
+  of the `reply`/`SessionConfig` API (goose reads it via `get_param`, env over
+  config file; `≥1.0` would disable it).
 - Model can be switched per-turn (picker in Chat UI).
 
 ### Diagnose (`diagnose.rs`)

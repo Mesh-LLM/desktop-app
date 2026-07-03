@@ -39,6 +39,18 @@ pub fn init_process_defaults() {
         unsafe { std::env::set_var("GOOSE_DISABLE_KEYRING", "1") };
     }
 
+    // Auto-compact the conversation once it fills 40% of the model's context
+    // window (goose's default is 0.8). The mesh runs small local models with
+    // modest context, and our one long-lived session accretes history across
+    // restarts — compacting early keeps turns snappy and avoids hard
+    // truncation mid-reply. goose reads this via get_param (env takes
+    // precedence over its config file); it's the only knob — the compaction
+    // threshold isn't part of the reply/SessionConfig API.
+    if std::env::var_os("GOOSE_AUTO_COMPACT_THRESHOLD").is_none() {
+        // Safety: called from main before any other threads exist.
+        unsafe { std::env::set_var("GOOSE_AUTO_COMPACT_THRESHOLD", "0.4") };
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(

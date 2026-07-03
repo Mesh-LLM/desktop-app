@@ -28,6 +28,19 @@ just check      # fmt + lint + rust tests + playwright e2e (mocked)
   `global.block-artifacts.com` URLs into `ui/package-lock.json`.
 - goose builtins: keep `register_builtin_extensions(...)` in `agent.rs`.
 
+## Releasing (macOS)
+- `just release` → signed **+ notarized** `Mesh.app` + `.dmg` in
+  `target/release/bundle/`. Opens cleanly on other Macs (no Gatekeeper
+  "unidentified developer" warning). `just release-signed-only` skips the
+  Apple notarization round-trip for fast local iteration.
+- Needs `APPLE_*` env vars set + a `Developer ID Application` cert in the
+  keychain. The release script bridges `APPLE_IDENTITY`→`APPLE_SIGNING_IDENTITY`
+  and `APPLE_ID_PASSWORD`→`APPLE_PASSWORD` (the names Tauri reads). No identity
+  or secret is hardcoded — all from env at build time.
+- Bump `version` in `src-tauri/tauri.conf.json` before cutting a release.
+- `just bundle` / `just run` stay ad-hoc signed for local dev — untouched.
+- Full details, env var mapping, and troubleshooting: **`SIGNING.md`**.
+
 ## Verify your work
 - Rust: `cargo test` in `src-tauri`.
 - UI/flows: `npm --prefix ui run test:e2e` (mocked; headless browser drives the

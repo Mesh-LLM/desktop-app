@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { streamChat } from '../lib/api'
+import { appApi, streamChat } from '../lib/api'
 import type { ChatMessage, ChatToolCall } from '../lib/types'
 
 const STARTERS = [
@@ -50,6 +50,33 @@ export default function Chat({
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
   }, [messages])
+
+  // Repaint the ongoing conversation on mount: goose keeps one long session
+  // that survives restarts, so returning to the app shows where we left off.
+  // A fresh session (first run / after "New chat") simply returns [].
+  useEffect(() => {
+    let cancelled = false
+    appApi
+      .history()
+      .then((past) => {
+        if (cancelled || past.length === 0) return
+        setMessages(
+          past.map((m) => ({
+            id: m.id,
+            role: m.role,
+            text: m.text,
+            thinking: m.thinking,
+            toolCalls: m.tool_calls,
+          })),
+        )
+      })
+      .catch(() => {
+        /* no history to restore — start on the empty state */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const send = async (text: string) => {
     const prompt = text.trim()
@@ -126,6 +153,21 @@ export default function Chat({
 
   const stop = () => abortRef.current?.abort()
 
+  // "New chat": drop the persisted session on the backend and clear the view.
+  // Subtle by design — the one long session is the default; this is the escape
+  // hatch. Disabled mid-stream and when there's nothing to clear.
+  const newChat = async () => {
+    if (streaming) return
+    try {
+      await appApi.newChat()
+    } catch {
+      /* even if the backend call fails, clear the view — next turn re-syncs */
+    }
+    setMessages([])
+    rawRef.current = ''
+    thinkingRef.current = ''
+  }
+
   const selectedMeta = models.find((m) => m.id === selectedModel)
 
   return (
@@ -154,6 +196,15 @@ export default function Chat({
             · running on {selectedMeta.local ? 'this Mac' : 'the mesh'}
           </span>
         )}
+        <button
+          data-testid="chat-new"
+          onClick={() => void newChat()}
+          disabled={streaming || messages.length === 0}
+          title="Start a fresh conversation — clears this chat's history"
+          className="ml-auto text-[12px] text-ink-faint underline-offset-2 hover:text-ink hover:underline disabled:cursor-default disabled:opacity-40 disabled:hover:no-underline"
+        >
+          New chat
+        </button>
       </div>
 
       {/* messages */}
@@ -185,6 +236,7 @@ export default function Chat({
               m.role === 'user' ? (
                 <div
                   key={m.id}
+                  data-testid="user-message"
                   className="self-end rounded-(--radius-card) bg-inset px-4 py-3 text-[15px]"
                 >
                   {m.text}

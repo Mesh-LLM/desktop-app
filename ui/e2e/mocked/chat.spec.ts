@@ -80,3 +80,48 @@ test('send disables on empty input and Enter submits', async ({ page }) => {
   await input.press('Enter')
   await expect(page.getByTestId('assistant-message')).toBeVisible()
 })
+
+// These override the shared beforeEach's mock with a history-seeded one, so
+// re-run installMockBackend before navigating.
+test('restores the ongoing conversation on launch (persistent session)', async ({ page }) => {
+  await installMockBackend(page, {
+    startRunning: true,
+    history: [
+      { id: 'h1', role: 'user', text: 'what did we name the project?' },
+      { id: 'h2', role: 'assistant', text: 'We called it mesh-console.' },
+    ],
+  })
+  await page.goto('/')
+  await expect(page.getByTestId('mesh-name')).toBeVisible()
+
+  // The prior turns repaint instead of the "Say hello." empty state.
+  await expect(page.getByText('Say hello.')).toHaveCount(0)
+  await expect(page.getByTestId('user-message')).toContainText('what did we name the project?')
+  await expect(page.getByTestId('assistant-text')).toContainText('We called it mesh-console.')
+})
+
+test('"New chat" clears the conversation and forgets the session', async ({ page }) => {
+  await installMockBackend(page, {
+    startRunning: true,
+    history: [
+      { id: 'h1', role: 'user', text: 'remember this' },
+      { id: 'h2', role: 'assistant', text: 'noted.' },
+    ],
+  })
+  await page.goto('/')
+  await expect(page.getByTestId('user-message')).toContainText('remember this')
+
+  // The subtle reset: clears the view and calls the backend to drop the session.
+  await page.getByTestId('chat-new').click()
+  await expect(page.getByText('Say hello.')).toBeVisible()
+  await expect(page.getByTestId('user-message')).toHaveCount(0)
+
+  const newChatCalls = await page.evaluate(
+    () =>
+      (window as unknown as { __mockState: { newChatCalls: unknown[] } }).__mockState.newChatCalls,
+  )
+  expect(newChatCalls).toHaveLength(1)
+
+  // "New chat" is disabled again once the conversation is empty.
+  await expect(page.getByTestId('chat-new')).toBeDisabled()
+})

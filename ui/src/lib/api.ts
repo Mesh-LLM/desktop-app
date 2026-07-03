@@ -1,6 +1,7 @@
 import type {
   ChatCompletedInfo,
   DiagnoseReport,
+  HistoryMessage,
   Phase,
   StatusPayload,
   V1Model,
@@ -43,6 +44,10 @@ export const appApi = {
   invite: () => fetch('/app/invite').then((r) => json<{ token: string; approx_bytes: number }>(r)),
   shutdown: () => fetch('/app/shutdown', { method: 'POST' }).then((r) => json<{ ok: boolean }>(r)),
   reset: () => fetch('/app/reset', { method: 'POST' }).then((r) => json<{ ok: boolean }>(r)),
+  /** The persisted conversation, to repaint the ongoing chat on launch. */
+  history: () => fetch('/app/history').then((r) => json<HistoryMessage[]>(r)),
+  /** "New chat": forget the current session so the next turn starts fresh. */
+  newChat: () => fetch('/app/new_chat', { method: 'POST' }).then((r) => json<{ ok: boolean }>(r)),
 }
 
 export const nodeApi = {

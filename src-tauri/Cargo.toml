@@ -32,19 +32,23 @@ mesh-llm-system = { git = "https://github.com/Mesh-LLM/mesh-llm" }
 # package mesh-llm-client (dir crates/mesh-client), lib name mesh_client
 mesh-llm-client = { git = "https://github.com/Mesh-LLM/mesh-llm" }
 
-# goose agent embedded in-process. Same fork+rev as the proven mesh-app
-# reference; rustls-tls keeps a single TLS backend across the tree.
-goose = { git = "https://github.com/aaif-goose/goose", rev = "31bc265a", default-features = false, features = ["rustls-tls"] }
-goose-providers = { git = "https://github.com/aaif-goose/goose", rev = "31bc265a", default-features = false, features = ["rustls-tls"] }
+# goose agent embedded in-process. Git dep pinned to a commit on
+# aaif-goose/goose `main` (the canonical goose repo — not a private fork).
+# rustls-tls keeps a single TLS backend across the tree.
+# rev c82c431c = main HEAD as of 2026-07-03 (goose 1.41.0), bumped from
+# 31bc265a (1.40.0). The provider/session/ModelConfig surface we use churns —
+# bump this rev deliberately and re-run `cargo test`, don't float a branch.
+goose = { git = "https://github.com/aaif-goose/goose", rev = "c82c431c", default-features = false, features = ["rustls-tls"] }
+goose-providers = { git = "https://github.com/aaif-goose/goose", rev = "c82c431c", default-features = false, features = ["rustls-tls"] }
 # Bundled MCP servers (computercontroller etc.). goose's builtin registry
 # starts EMPTY for embedders — see register_builtin_extensions in agent.rs.
-goose-mcp = { git = "https://github.com/aaif-goose/goose", rev = "31bc265a", default-features = false, features = ["rustls-tls"] }
-# Same rmcp as goose's tree (^1.4 → one unified version) for Role and the
-# tool-call param types used in agent event translation + tests.
-# Cargo.lock pins rmcp AND rmcp-macros at 1.7.0: goose rev 31bc265a does not
-# compile against rmcp 1.8 (peer_info() signature change), and rmcp-macros
-# must match rmcp exactly (1.8 macros emit calls 1.7 doesn't have). Don't let
-# `cargo update` bump either.
+goose-mcp = { git = "https://github.com/aaif-goose/goose", rev = "c82c431c", default-features = false, features = ["rustls-tls"] }
+# Same rmcp as goose's tree (goose declares ^1.4 → one unified version) for
+# Role and the tool-call param types used in agent event translation + tests.
+# Cargo.lock keeps rmcp AND rmcp-macros at 1.7.0. This is NOT arbitrary: goose
+# 1.41.0 still does not compile against rmcp 1.8 (InitializeResult/peer_info()
+# signature change — verified 2026-07-03), and rmcp-macros must match rmcp
+# exactly. Re-test before bumping either; don't let `cargo update` float them.
 rmcp = { version = "1.4", default-features = false }
 
 tauri = { version = "2", features = [] }
@@ -63,3 +67,6 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tempfile = "3"

@@ -63,13 +63,16 @@ untestable UI layer).
   `mesh-llm-events`,
   `mesh-llm-system` (hardware detection), `mesh-llm-client` (model catalog,
   `auto_model_pack`).
-- **goose**: `aaif-goose/goose` PINNED `rev = "31bc265a"` (same as mesh-app),
-  `rustls-tls`, plus `goose-mcp` for bundled MCP servers.
+- **goose**: `aaif-goose/goose` (the canonical goose repo, not a private fork)
+  PINNED `rev = "c82c431c"` = its `main` HEAD as of 2026-07-03 (goose 1.41.0),
+  `rustls-tls`, plus `goose-mcp` for bundled MCP servers. Bump the rev
+  deliberately and re-run `cargo test` — the provider/session surface churns.
   **Gotcha:** goose's builtin extension registry starts EMPTY for embedders —
   `agent.rs` calls `register_builtin_extensions(goose_mcp::BUILTIN_EXTENSIONS)`.
-- **rmcp**: Cargo.lock pins rmcp AND rmcp-macros at **1.7.0**. goose 31bc265a
-  does not compile against rmcp 1.8 (`peer_info()` signature change), and
-  rmcp-macros must match rmcp exactly. Don't let `cargo update` bump either.
+- **rmcp**: Cargo.lock keeps rmcp AND rmcp-macros at **1.7.0**. goose 1.41.0
+  still does not compile against rmcp 1.8 (`InitializeResult`/`peer_info()`
+  signature change — re-verified 2026-07-03), and rmcp-macros must match rmcp
+  exactly. Re-test before bumping either; don't let `cargo update` float them.
 - **hf-hub**: `[patch.crates-io]` → git branch
   `Mesh-LLM/hf-hub#mesh-console/disable-xet-env` (fork base + one commit
   honoring `HF_HUB_DISABLE_XET`; app sets it by default). REQUIRED for big
@@ -95,11 +98,32 @@ untestable UI layer).
 - Phases: `idle → hosting/joining (with download events) → running`.
 
 ### Agent (`agent.rs`)
-- One session (`SessionManager::instance().create_session`), `Agent::new()`,
-  `update_provider(OpenAI provider → node /v1, ModelConfig::new(model))`.
-- Extensions: developer + computercontroller + fetch (via goose-mcp builtins).
+- **One long-lived session that survives restarts.** goose persists its
+  conversation to SQLite under `GOOSE_PATH_ROOT`; we remember which session is
+  "ours" in a `mesh-console-session` pointer file next to it. `ensure_agent`
+  reuses that id (verified via `get_session`) instead of minting a fresh one,
+  so returning to the app continues the same chat. New session only on first
+  run, after a reset, or if the id is gone from the store.
+- `Agent::new()`, `update_provider(OpenAI provider → node /v1,
+  ModelConfig::new(model))`. Extensions: developer + skills (goose-mcp builtins
+  seeded via `register_builtin_extensions`).
 - A mutex serializes turns; each `/app/chat` POST drives one `reply()` stream,
   translating `AgentEvent`s into SSE `Frame`s (text deltas, tool activity).
+- **Resume on launch**: `GET /app/history` flattens the persisted transcript
+  into UI messages (`shape_history`, unit-tested — same role/content rules as
+  the live translator: assistant text/thinking + tool chips; tool-output
+  user messages dropped). The Chat repaints from it on mount.
+- **Subtle reset**: `POST /app/new_chat` clears the pointer + tears down the
+  agent so the next turn starts fresh (the old chat stays in goose's store,
+  just no longer active). Surfaced as a quiet "New chat" link in the chat top
+  bar. Distinct from `/app/reset` (leave-mesh / error recovery).
+- **Auto-compaction**: goose summarizes older turns once the conversation
+  fills a fraction of the model's context window. We fix that fraction at
+  **0.4** (goose default 0.8) via `GOOSE_AUTO_COMPACT_THRESHOLD` in
+  `init_process_defaults` — small mesh models have modest context and the one
+  long-lived session accretes history. It's env-only: the threshold isn't part
+  of the `reply`/`SessionConfig` API (goose reads it via `get_param`, env over
+  config file; `≥1.0` would disable it).
 - Model can be switched per-turn (picker in Chat UI).
 
 ### Diagnose (`diagnose.rs`)

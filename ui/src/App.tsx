@@ -10,6 +10,12 @@ import MeshLive from './screens/MeshLive'
 import Main from './screens/Main'
 import { appApi } from './lib/api'
 import { connect, useApp } from './lib/store'
+import {
+  clearLastConfig,
+  loadLastConfig,
+  saveLastConfig,
+  type LaunchConfig,
+} from './lib/session'
 import type { Visibility as Vis } from './lib/types'
 
 type View =
@@ -67,6 +73,7 @@ export default function App() {
         /* join below still 409s if the node is genuinely stuck */
       }
       if (pendingShareRef.current === model) {
+        saveLastConfig({ kind: 'public', share: true, model })
         void appApi.join('', true, model, { public: true })
         setPendingShare(null)
         setView({ name: 'progress', goal: 'join', flavor: 'public-share' })
@@ -85,8 +92,40 @@ export default function App() {
 
   if (!booted) return null
 
+  // Persist the launch intent, then fire the matching backend call and move to
+  // the right progress screen. One place so every front door remembers itself
+  // for the next "Back to mesh".
+  const launch = (config: LaunchConfig) => {
+    saveLastConfig(config)
+    switch (config.kind) {
+      case 'host':
+        void appApi.host(config.model, config.visibility)
+        setView({ name: 'progress', goal: 'host' })
+        break
+      case 'join':
+        void appApi.join(config.token, config.share, config.model)
+        setView({ name: 'progress', goal: 'join' })
+        break
+      case 'public':
+        void appApi.join('', config.share, config.model, { public: true })
+        setView({
+          name: 'progress',
+          goal: 'join',
+          flavor: config.share ? 'public-share' : 'public-passive',
+        })
+        break
+    }
+  }
+
+  // "Back to mesh": re-launch whatever was last remembered, straight from Welcome.
+  const resume = () => {
+    const last = loadLastConfig()
+    if (last) launch(last)
+  }
+
   const leaveMesh = () => {
     setPendingShare(null)
+    clearLastConfig()
     void appApi.shutdown()
     setView({ name: 'welcome' })
   }
@@ -95,6 +134,9 @@ export default function App() {
     case 'welcome':
       return (
         <Welcome
+          lastConfig={loadLastConfig()}
+          onResume={resume}
+          onStartFresh={clearLastConfig}
           onJoinPublic={() => setView({ name: 'public-mode' })}
           onJoin={(prefillToken) => setView({ name: 'join', prefillToken })}
           onHost={() => setView({ name: 'host-setup' })}
@@ -105,10 +147,7 @@ export default function App() {
       return (
         <PublicJoin
           onBack={() => setView({ name: 'welcome' })}
-          onPassive={() => {
-            void appApi.join('', false, undefined, { public: true })
-            setView({ name: 'progress', goal: 'join', flavor: 'public-passive' })
-          }}
+          onPassive={() => launch({ kind: 'public', share: false })}
           onContribute={() => setView({ name: 'public-setup' })}
         />
       )
@@ -117,10 +156,7 @@ export default function App() {
       return (
         <PowerSetup
           onBack={() => setView({ name: 'public-mode' })}
-          onModelChosen={(model) => {
-            void appApi.join('', true, model, { public: true })
-            setView({ name: 'progress', goal: 'join', flavor: 'public-share' })
-          }}
+          onModelChosen={(model) => launch({ kind: 'public', share: true, model })}
         />
       )
 
@@ -144,8 +180,7 @@ export default function App() {
             if (share) {
               setView({ name: 'join-setup', token })
             } else {
-              void appApi.join(token, false)
-              setView({ name: 'progress', goal: 'join' })
+              launch({ kind: 'join', token, share: false })
             }
           }}
         />
@@ -155,10 +190,7 @@ export default function App() {
       return (
         <PowerSetup
           onBack={() => setView({ name: 'join', prefillToken: view.token })}
-          onModelChosen={(model) => {
-            void appApi.join(view.token, true, model)
-            setView({ name: 'progress', goal: 'join' })
-          }}
+          onModelChosen={(model) => launch({ kind: 'join', token: view.token, share: true, model })}
         />
       )
 
@@ -174,10 +206,7 @@ export default function App() {
       return (
         <Visibility
           onBack={() => setView({ name: 'host-setup' })}
-          onChosen={(visibility: Vis) => {
-            void appApi.host(view.model, visibility)
-            setView({ name: 'progress', goal: 'host' })
-          }}
+          onChosen={(visibility: Vis) => launch({ kind: 'host', model: view.model, visibility })}
         />
       )
 
@@ -208,11 +237,13 @@ export default function App() {
       }
       const cancel = () => {
         setPendingShare(null)
+        clearLastConfig()
         void appApi.shutdown()
         setView({ name: 'welcome' })
       }
       const errorReset = () => {
         setPendingShare(null)
+        clearLastConfig()
         void appApi.reset()
         setView({ name: 'welcome' })
       }
@@ -221,8 +252,7 @@ export default function App() {
           <PublicProgress
             flavor={view.flavor}
             pendingShare={pendingShare}
-            onShareModel={queueShareUpgrade}
-            onBrowseModels={() => setView({ name: 'public-upgrade-setup' })}
+            onShareCompute={() => setView({ name: 'public-upgrade-setup' })}
             onStartChatting={() => setView({ name: 'main' })}
             onCancel={cancel}
             onErrorReset={errorReset}

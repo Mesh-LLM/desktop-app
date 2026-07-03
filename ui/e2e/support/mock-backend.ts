@@ -86,33 +86,6 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
       ],
     }
 
-    // The mesh view's "models on this Mac" list. Qwen3-0.6B matches the mock's
-    // serving_models (→ shows "On"); GLM is downloaded but off.
-    const INSTALLED = [
-      {
-        name: 'Qwen3-0.6B-Q4_K_M',
-        file: 't.gguf',
-        size: '397MB',
-        size_gb: 0.397,
-        description: 'Small and quick.',
-        fit: 'comfortable',
-        installed: true,
-        recommended: false,
-        draft: false,
-      },
-      {
-        name: 'GLM-4.7-Flash-Q4_K_M',
-        file: 'g.gguf',
-        size: '18GB',
-        size_gb: 18,
-        description: 'Fast, capable all-rounder for everyday use.',
-        fit: 'comfortable',
-        installed: true,
-        recommended: false,
-        draft: false,
-      },
-    ]
-
     const MODEL_ID = 'unsloth/Qwen3-0.6B-GGUF:Q4_K_M'
     const STATUS = {
       node_id: 'mock-node',
@@ -146,8 +119,6 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
       hostCalls: [] as Json[],
       joinCalls: [] as Json[],
       chatCalls: [] as Json[],
-      serveCalls: [] as Json[],
-      unserveCalls: [] as Json[],
       shutdownCalls: [] as Json[],
     }
 
@@ -335,15 +306,6 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
         return json({ ok: true }, 202)
       }
       if (path === '/app/invite') return json({ token: TOKEN, approx_bytes: TOKEN.length })
-      if (path === '/app/installed_models') return json(INSTALLED)
-      if (path === '/app/serve_model') {
-        state.serveCalls.push(JSON.parse(String(init?.body ?? '{}')))
-        return json({ loaded: 'ok' }, 201)
-      }
-      if (path === '/app/unserve_model') {
-        state.unserveCalls.push(JSON.parse(String(init?.body ?? '{}')))
-        return json({ ok: true })
-      }
       if (path === '/app/shutdown' || path === '/app/reset') {
         if (path === '/app/shutdown') state.shutdownCalls.push({})
         // Emit (not just mutate) so the store sees the running→idle hop the

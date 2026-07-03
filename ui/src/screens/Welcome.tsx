@@ -2,15 +2,29 @@ import { useEffect, useState } from 'react'
 import MeshViz from '../components/MeshViz'
 import { Card, ReassuranceLine } from '../components/ui'
 import { looksLikeInviteToken } from '../lib/api'
+import { lastConfigLabel, type LaunchConfig } from '../lib/session'
 
 interface WelcomeProps {
+  /** The last mesh this app launched, if any — powers "Back to mesh". */
+  lastConfig: LaunchConfig | null
+  onResume: () => void
+  onStartFresh: () => void
   onJoinPublic: () => void
   onJoin: (prefillToken?: string) => void
   onHost: () => void
 }
 
-export default function Welcome({ onJoinPublic, onJoin, onHost }: WelcomeProps) {
+export default function Welcome({
+  lastConfig,
+  onResume,
+  onStartFresh,
+  onJoinPublic,
+  onJoin,
+  onHost,
+}: WelcomeProps) {
   const [clipboardToken, setClipboardToken] = useState<string | null>(null)
+  const [dismissed, setDismissed] = useState(false)
+  const showResume = lastConfig !== null && !dismissed
 
   useEffect(() => {
     let cancelled = false
@@ -37,6 +51,37 @@ export default function Welcome({ onJoinPublic, onJoin, onHost }: WelcomeProps) 
         <div className="flex items-center gap-2 font-mono text-lg text-accent">
           <span aria-hidden>&#9671;</span> mesh
         </div>
+
+        {showResume && lastConfig && (
+          <div
+            data-testid="resume-banner"
+            className="flex w-full items-center gap-3 rounded-(--radius-card) border border-accent/60 bg-accent/[0.07] px-4 py-3"
+          >
+            <button
+              data-testid="resume-mesh"
+              onClick={onResume}
+              className="flex flex-1 items-center gap-2 text-left text-sm font-semibold text-accent"
+            >
+              <span aria-hidden>&#8630;</span>
+              {lastConfigLabel(lastConfig)}
+              <span className="transition-transform" aria-hidden>
+                &rarr;
+              </span>
+            </button>
+            <button
+              data-testid="resume-dismiss"
+              onClick={() => {
+                onStartFresh()
+                setDismissed(true)
+              }}
+              className="text-[12px] text-ink-muted underline-offset-2 hover:text-ink hover:underline"
+              title="Forget this mesh and start fresh"
+            >
+              Start fresh
+            </button>
+          </div>
+        )}
+
         <div className="text-center">
           <h1 className="text-[32px] leading-tight font-bold tracking-tight">
             Your own AI. On your own machines.

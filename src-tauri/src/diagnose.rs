@@ -91,12 +91,7 @@ pub fn diagnose() -> DiagnoseReport {
         disk_free_display: format_disk(disk_free_bytes),
     };
 
-    // mesh-console's opinionated overlay gets first say on the recommendation
-    // for this machine size; only fall back to upstream's auto_model_pack when
-    // no overlay model claims the machine.
-    let recommended_name = crate::models::recommended_for(vram_gb)
-        .map(|m| m.name.clone())
-        .or_else(|| auto_model_pack(vram_gb).into_iter().next());
+    let recommended_name = auto_model_pack(vram_gb).into_iter().next();
     let recommended = recommended_name.clone().map(|name| RecommendedModel {
         reason: format!("Best fit for {} of AI memory", hardware.vram_display),
         name,
@@ -109,30 +104,22 @@ pub fn diagnose() -> DiagnoseReport {
         })
     };
 
-    let entry_from = |name: &str, file: &str, size: &str, description: &str, draft: bool| {
-        let size_gb = parse_size_gb(size);
-        CatalogEntry {
-            fit: fit_code(size_gb, vram_gb),
-            installed: is_installed(file, name),
-            recommended: recommended_name.as_deref() == Some(name),
-            draft,
-            name: name.to_string(),
-            file: file.to_string(),
-            size: size.to_string(),
-            size_gb,
-            description: description.to_string(),
-        }
-    };
-
-    // mesh-console's overlay models first, then the upstream catalog.
-    let mut catalog: Vec<CatalogEntry> = crate::models::OVERLAY_MODELS
+    let mut catalog: Vec<CatalogEntry> = MODEL_CATALOG
         .iter()
-        .map(|m| entry_from(&m.name, &m.file, &m.size, &m.description, false))
-        .chain(
-            MODEL_CATALOG
-                .iter()
-                .map(|m| entry_from(&m.name, &m.file, &m.size, &m.description, m.draft.is_some())),
-        )
+        .map(|m| {
+            let size_gb = parse_size_gb(&m.size);
+            CatalogEntry {
+                fit: fit_code(size_gb, vram_gb),
+                installed: is_installed(&m.file, &m.name),
+                recommended: recommended_name.as_deref() == Some(m.name.as_str()),
+                draft: m.draft.is_some(),
+                name: m.name.clone(),
+                file: m.file.clone(),
+                size: m.size.clone(),
+                size_gb,
+                description: m.description.clone(),
+            }
+        })
         .collect();
 
     // Recommended first, then by fit class, then larger models first within a class.
@@ -148,36 +135,6 @@ pub fn diagnose() -> DiagnoseReport {
         recommended,
         catalog,
     }
-}
-
-/// The catalog entries whose weights are already downloaded, minus draft
-/// (speculative-decoding) models. Cheap: skips the hardware survey, so the
-/// running mesh view can list "what this Mac already has" without a full scan.
-pub fn installed_catalog() -> Vec<CatalogEntry> {
-    let installed = scan_installed_models(default_huggingface_cache_dir());
-    let is_installed = |file: &str, name: &str| {
-        installed.iter().any(|m| {
-            m.path.file_name().and_then(|f| f.to_str()) == Some(file) || m.model_ref.contains(name)
-        })
-    };
-
-    MODEL_CATALOG
-        .iter()
-        .filter(|m| m.draft.is_none() && is_installed(&m.file, &m.name))
-        .map(|m| CatalogEntry {
-            // No hardware context here, so fit is a placeholder the mesh view
-            // ignores — these weights are already on disk.
-            fit: "comfortable",
-            installed: true,
-            recommended: false,
-            draft: false,
-            name: m.name.clone(),
-            file: m.file.clone(),
-            size: m.size.clone(),
-            size_gb: parse_size_gb(&m.size),
-            description: m.description.clone(),
-        })
-        .collect()
 }
 
 /// Free bytes on the volume backing `path`. macOS-only shell-out to `df` (the
@@ -268,16 +225,6 @@ mod tests {
             "expected a real free-disk figure"
         );
         assert_ne!(report.hardware.disk_free_display, "—");
-    }
-
-    #[test]
-    fn installed_catalog_is_installed_non_draft_subset() {
-        // Content depends on the machine's cache, but the invariants hold
-        // regardless: every entry is installed and never a draft model.
-        for entry in installed_catalog() {
-            assert!(entry.installed);
-            assert!(!entry.draft);
-        }
     }
 
     #[test]

@@ -49,14 +49,21 @@ test('global mesh: "just connect" joins as a public passive client', async ({ pa
   expect(joinCalls[0]).toMatchObject({ public: true, share: false })
 })
 
-test('global mesh: passive client upgrades to sharing an installed model', async ({ page }) => {
+test('global mesh: passive client upgrades to sharing this Mac’s compute', async ({ page }) => {
   await page.goto('/')
   await page.getByTestId('welcome-public').click()
   await page.getByTestId('public-continue').click()
 
-  // Once connected, share an already-downloaded model straight from the card.
+  // Once connected, offer to also share this Mac's compute. You share compute,
+  // not a specific model — the choice routes through the hardware check, which
+  // picks the best-fit model for the machine.
   await expect(page.getByTestId('start-chatting')).toBeVisible({ timeout: 10_000 })
-  await page.getByTestId('public-share-GLM-4.7-Flash-Q4_K_M').click()
+  await page.getByTestId('public-share-compute').click()
+
+  // The hardware check runs and recommends the best-fit model for this Mac;
+  // accept it.
+  await expect(page.getByTestId('reveal-screen')).toBeVisible({ timeout: 6000 })
+  await page.getByTestId('use-model').click()
 
   // The upgrade is a shutdown + rejoin with share:true…
   await expect
@@ -84,7 +91,7 @@ test('global mesh: passive client upgrades to sharing an installed model', async
   expect(joinCalls[1]).toMatchObject({
     public: true,
     share: true,
-    model: 'GLM-4.7-Flash-Q4_K_M',
+    model: 'Qwen3-Coder-Next-Q4_K_M',
   })
 })
 
@@ -186,49 +193,6 @@ test('setup skips the scan when a model is already downloaded', async ({ page })
   await expect(page.getByText('Checking your Mac...')).toBeVisible()
 })
 
-test('mesh view lists downloaded models and toggles serving on this Mac', async ({ page }) => {
-  await installMockBackend(page, { startRunning: true })
-  await page.goto('/')
-  await expect(page.getByTestId('mesh-name')).toBeVisible()
-
-  const qwen = page.getByTestId('local-model-Qwen3-0.6B-Q4_K_M')
-  const glm = page.getByTestId('local-model-GLM-4.7-Flash-Q4_K_M')
-  // Qwen3-0.6B matches the mock's serving_models → On; GLM is downloaded but off.
-  await expect(qwen).toContainText('On')
-  await expect(glm).toContainText('Off')
-
-  // Turn GLM on → serve_model; turn Qwen off → unserve_model.
-  await glm.click()
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          (window as unknown as { __mockState: { serveCalls: unknown[] } }).__mockState.serveCalls
-            .length,
-      ),
-    )
-    .toBe(1)
-  await qwen.click()
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          (window as unknown as { __mockState: { unserveCalls: unknown[] } }).__mockState
-            .unserveCalls.length,
-      ),
-    )
-    .toBe(1)
-
-  const [serveCalls, unserveCalls] = await page.evaluate(() => {
-    const s = window as unknown as {
-      __mockState: { serveCalls: unknown[]; unserveCalls: unknown[] }
-    }
-    return [s.__mockState.serveCalls, s.__mockState.unserveCalls]
-  })
-  expect(serveCalls[0]).toMatchObject({ model: 'GLM-4.7-Flash-Q4_K_M' })
-  expect(unserveCalls[0]).toMatchObject({ model: 'Qwen3-0.6B-Q4_K_M' })
-})
-
 test('host flow: scan → reveal → visibility → progress → mesh live with QR → main window', async ({
   page,
 }) => {
@@ -327,6 +291,47 @@ test('join flow validates the invite code and reaches the main window as chat-on
   )
   expect(joinCalls).toHaveLength(1)
   expect(joinCalls[0]).toMatchObject({ token: goodToken, share: false })
+})
+
+test('remembers the last mesh and offers "Back to mesh" on a fresh open', async ({ page }) => {
+  // Launch the global mesh as a passive client, reaching the main window.
+  await page.goto('/')
+  await page.getByTestId('welcome-public').click()
+  await page.getByTestId('public-continue').click()
+  await expect(page.getByTestId('start-chatting')).toBeVisible({ timeout: 10_000 })
+  await page.getByTestId('start-chatting').click()
+  await expect(page.getByTestId('mesh-name')).toBeVisible({ timeout: 10_000 })
+
+  // Reload: the mock backend boots Idle again (in-memory), so we land on
+  // Welcome — but the remembered config surfaces a "Back to mesh" banner.
+  await page.reload()
+  await expect(page.getByTestId('resume-banner')).toBeVisible()
+  await expect(page.getByTestId('resume-mesh')).toContainText('global mesh')
+
+  // One click re-launches the same passive public join.
+  await page.getByTestId('resume-mesh').click()
+  await expect(page.getByTestId('start-chatting')).toBeVisible({ timeout: 10_000 })
+  const joinCalls = await page.evaluate(
+    () => (window as unknown as { __mockState: { joinCalls: unknown[] } }).__mockState.joinCalls,
+  )
+  expect(joinCalls[joinCalls.length - 1]).toMatchObject({ public: true, share: false })
+})
+
+test('"Start fresh" forgets the remembered mesh so the banner stays gone', async ({ page }) => {
+  await page.goto('/')
+  await page.getByTestId('welcome-public').click()
+  await page.getByTestId('public-continue').click()
+  await expect(page.getByTestId('start-chatting')).toBeVisible({ timeout: 10_000 })
+
+  await page.reload()
+  await expect(page.getByTestId('resume-banner')).toBeVisible()
+  await page.getByTestId('resume-dismiss').click()
+  await expect(page.getByTestId('resume-banner')).toHaveCount(0)
+
+  // Still gone after another reload — the config was cleared, not just hidden.
+  await page.reload()
+  await expect(page.getByTestId('welcome-public')).toBeVisible()
+  await expect(page.getByTestId('resume-banner')).toHaveCount(0)
 })
 
 test('appearance setting flips to light mode and persists across reload', async ({ page }) => {

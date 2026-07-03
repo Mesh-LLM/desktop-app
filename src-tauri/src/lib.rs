@@ -5,7 +5,6 @@
 pub mod agent;
 pub mod diagnose;
 pub mod events;
-pub mod models;
 pub mod node;
 pub mod proxy;
 pub mod server;

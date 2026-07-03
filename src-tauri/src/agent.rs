@@ -232,15 +232,11 @@ where
                 let assistant = msg.role == Role::Assistant;
                 for content in &msg.content {
                     match content {
-                        MessageContent::Text(t) if assistant => {
-                            if !t.text.is_empty() {
-                                send!(Frame::Delta(t.text.clone()));
-                            }
+                        MessageContent::Text(t) if assistant && !t.text.is_empty() => {
+                            send!(Frame::Delta(t.text.clone()));
                         }
-                        MessageContent::Thinking(t) if assistant => {
-                            if !t.thinking.is_empty() {
-                                send!(Frame::Reasoning(t.thinking.clone()));
-                            }
+                        MessageContent::Thinking(t) if assistant && !t.thinking.is_empty() => {
+                            send!(Frame::Reasoning(t.thinking.clone()));
                         }
                         MessageContent::ToolRequest(req) => {
                             let name = req

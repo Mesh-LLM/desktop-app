@@ -63,13 +63,16 @@ untestable UI layer).
   `mesh-llm-events`,
   `mesh-llm-system` (hardware detection), `mesh-llm-client` (model catalog,
   `auto_model_pack`).
-- **goose**: `aaif-goose/goose` PINNED `rev = "31bc265a"` (same as mesh-app),
-  `rustls-tls`, plus `goose-mcp` for bundled MCP servers.
+- **goose**: `aaif-goose/goose` (the canonical goose repo, not a private fork)
+  PINNED `rev = "c82c431c"` = its `main` HEAD as of 2026-07-03 (goose 1.41.0),
+  `rustls-tls`, plus `goose-mcp` for bundled MCP servers. Bump the rev
+  deliberately and re-run `cargo test` — the provider/session surface churns.
   **Gotcha:** goose's builtin extension registry starts EMPTY for embedders —
   `agent.rs` calls `register_builtin_extensions(goose_mcp::BUILTIN_EXTENSIONS)`.
-- **rmcp**: Cargo.lock pins rmcp AND rmcp-macros at **1.7.0**. goose 31bc265a
-  does not compile against rmcp 1.8 (`peer_info()` signature change), and
-  rmcp-macros must match rmcp exactly. Don't let `cargo update` bump either.
+- **rmcp**: Cargo.lock keeps rmcp AND rmcp-macros at **1.7.0**. goose 1.41.0
+  still does not compile against rmcp 1.8 (`InitializeResult`/`peer_info()`
+  signature change — re-verified 2026-07-03), and rmcp-macros must match rmcp
+  exactly. Re-test before bumping either; don't let `cargo update` float them.
 - **hf-hub**: `[patch.crates-io]` → git branch
   `Mesh-LLM/hf-hub#mesh-console/disable-xet-env` (fork base + one commit
   honoring `HF_HUB_DISABLE_XET`; app sets it by default). REQUIRED for big

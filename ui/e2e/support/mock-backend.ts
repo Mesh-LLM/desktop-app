@@ -15,6 +15,15 @@ export interface MockOptions {
   /** Make /app/diagnose report a model already downloaded, so PowerSetup takes
    *  the "you've already got models" fast path instead of the scan beat. */
   installedInDiagnose?: boolean
+  /** Seed GET /app/history so the chat repaints a prior conversation on mount
+   *  (simulates a persistent goose session surviving an app restart). */
+  history?: Array<{
+    id: string
+    role: 'user' | 'assistant'
+    text: string
+    thinking?: string
+    tool_calls?: Array<{ id: string; name: string; status: 'done' | 'failed' }>
+  }>
 }
 
 export async function installMockBackend(page: Page, options: MockOptions = {}) {
@@ -119,6 +128,9 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
       hostCalls: [] as Json[],
       joinCalls: [] as Json[],
       chatCalls: [] as Json[],
+      newChatCalls: [] as Json[],
+      // Mutable so a "New chat" clears the seeded history for later reads.
+      history: (opts.history ?? []) as Json[],
       shutdownCalls: [] as Json[],
     }
 
@@ -317,6 +329,12 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
       if (path === '/api/models') return json({ mesh_models: [] })
       if (path === '/v1/models')
         return json({ data: [{ id: MODEL_ID, display_name: 'Qwen3-0.6B-Q4_K_M' }] })
+      if (path === '/app/history') return json(state.history)
+      if (path === '/app/new_chat') {
+        state.newChatCalls.push({})
+        state.history = []
+        return json({ ok: true })
+      }
       if (path === '/app/chat') {
         state.chatCalls.push(JSON.parse(String(init?.body ?? '{}')))
         return sseResponse(chatFrames())

@@ -149,3 +149,14 @@ export interface ChatMessage {
   error?: string
   completed?: ChatCompletedInfo
 }
+
+/** A past message from the persisted goose session (GET /app/history). The
+ *  backend already applies the chat's role/content rules; tool_calls are
+ *  terminal (no "running" state). Shaped to fold straight into ChatMessage. */
+export interface HistoryMessage {
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  thinking?: string
+  tool_calls?: Array<{ id: string; name: string; status: 'done' | 'failed' }>
+}

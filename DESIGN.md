@@ -98,11 +98,25 @@ untestable UI layer).
 - Phases: `idle → hosting/joining (with download events) → running`.
 
 ### Agent (`agent.rs`)
-- One session (`SessionManager::instance().create_session`), `Agent::new()`,
-  `update_provider(OpenAI provider → node /v1, ModelConfig::new(model))`.
-- Extensions: developer + computercontroller + fetch (via goose-mcp builtins).
+- **One long-lived session that survives restarts.** goose persists its
+  conversation to SQLite under `GOOSE_PATH_ROOT`; we remember which session is
+  "ours" in a `mesh-console-session` pointer file next to it. `ensure_agent`
+  reuses that id (verified via `get_session`) instead of minting a fresh one,
+  so returning to the app continues the same chat. New session only on first
+  run, after a reset, or if the id is gone from the store.
+- `Agent::new()`, `update_provider(OpenAI provider → node /v1,
+  ModelConfig::new(model))`. Extensions: developer + skills (goose-mcp builtins
+  seeded via `register_builtin_extensions`).
 - A mutex serializes turns; each `/app/chat` POST drives one `reply()` stream,
   translating `AgentEvent`s into SSE `Frame`s (text deltas, tool activity).
+- **Resume on launch**: `GET /app/history` flattens the persisted transcript
+  into UI messages (`shape_history`, unit-tested — same role/content rules as
+  the live translator: assistant text/thinking + tool chips; tool-output
+  user messages dropped). The Chat repaints from it on mount.
+- **Subtle reset**: `POST /app/new_chat` clears the pointer + tears down the
+  agent so the next turn starts fresh (the old chat stays in goose's store,
+  just no longer active). Surfaced as a quiet "New chat" link in the chat top
+  bar. Distinct from `/app/reset` (leave-mesh / error recovery).
 - Model can be switched per-turn (picker in Chat UI).
 
 ### Diagnose (`diagnose.rs`)

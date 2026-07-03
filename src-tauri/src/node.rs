@@ -177,8 +177,10 @@ async fn run_join(state: &Arc<AppState>, mut req: JoinRequest) -> Result<()> {
 }
 
 pub async fn shutdown(state: &Arc<AppState>) -> Result<()> {
-    // Agent first: cancel any in-flight reply before its provider's node goes
-    // away, and guarantee the next mesh launch starts a fresh session.
+    // Agent first: cancel any in-flight reply and drop the handle before its
+    // provider's node goes away. This does NOT reset the conversation — the
+    // session pointer persists, so the next launch resumes the same chat.
+    // (A deliberate "New chat" is what clears it; see agent::clear_session_pointer.)
     crate::agent::teardown(state).await;
     if let Some(node) = state.node.lock().await.take() {
         node.shutdown().await.context("shutting down mesh node")?;

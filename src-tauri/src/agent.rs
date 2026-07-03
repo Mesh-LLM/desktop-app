@@ -44,6 +44,38 @@ pub struct AgentHandle {
     pub turn_lock: Arc<Mutex<()>>,
 }
 
+/// Path to the file that remembers which goose session id is "the" mesh-console
+/// conversation, so it survives app restarts. Lives alongside goose's own state
+/// under GOOSE_PATH_ROOT (falls back to the temp dir only if that's unset).
+fn session_pointer_path() -> PathBuf {
+    let root = std::env::var_os("GOOSE_PATH_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    root.join("mesh-console-session")
+}
+
+/// The remembered session id, if any. `None` on first run or after a reset.
+fn load_session_pointer() -> Option<String> {
+    std::fs::read_to_string(session_pointer_path())
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn save_session_pointer(id: &str) {
+    let path = session_pointer_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(&path, id);
+}
+
+/// Forget the remembered session so the next chat starts a fresh conversation.
+/// Idempotent: a missing pointer is success.
+pub fn clear_session_pointer() {
+    let _ = std::fs::remove_file(session_pointer_path());
+}
+
 /// Build a goose Provider pointed at the embedded node's OpenAI-compatible
 /// port. The node accepts the api key "mesh"; ApiClient wants the bare
 /// authority and applies `base_path` itself.
@@ -100,22 +132,34 @@ pub async fn ensure_agent(state: &Arc<AppState>, model: &str) -> anyhow::Result<
     // must seed it (the goose CLI does the same at startup). Idempotent.
     goose::builtin_extension::register_builtin_extensions(goose_mcp::BUILTIN_EXTENSIONS.clone());
 
-    // Home dir as the agent's working dir: the developer extension resolves
-    // relative paths there, which is what "your Mac's agent" should mean.
-    let working_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    let session = SessionManager::instance()
-        .create_session(
-            working_dir,
-            "mesh-console".to_string(),
-            SessionType::Hidden,
-            GooseMode::default(), // Auto: tools run without approval (PoC scope)
-        )
-        .await
-        .map_err(|e| anyhow::anyhow!("create session: {e:#}"))?;
+    // One long-lived conversation that survives restarts: reuse the session id
+    // we remembered last time (goose persists its history to SQLite under
+    // GOOSE_PATH_ROOT). Fall back to a fresh session on first run, after a
+    // reset, or if the remembered id is gone from the store.
+    let manager = SessionManager::instance();
+    let session_id = match load_session_pointer() {
+        Some(id) if manager.get_session(&id, false).await.is_ok() => id,
+        _ => {
+            // Home dir as the agent's working dir: the developer extension
+            // resolves relative paths there — what "your Mac's agent" means.
+            let working_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+            let session = manager
+                .create_session(
+                    working_dir,
+                    "mesh-console".to_string(),
+                    SessionType::Hidden,
+                    GooseMode::default(), // Auto: tools run without approval (PoC scope)
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("create session: {e:#}"))?;
+            save_session_pointer(&session.id);
+            session.id
+        }
+    };
 
     let agent = Agent::new();
     agent
-        .update_provider(provider.clone(), ModelConfig::new(model), &session.id)
+        .update_provider(provider.clone(), ModelConfig::new(model), &session_id)
         .await
         .map_err(|e| anyhow::anyhow!("set provider: {e:#}"))?;
 
@@ -131,7 +175,7 @@ pub async fn ensure_agent(state: &Arc<AppState>, model: &str) -> anyhow::Result<
                 bundled: Some(true),
                 available_tools: Vec::new(),
             },
-            &session.id,
+            &session_id,
         )
         .await
         .map_err(|e| anyhow::anyhow!("add skills extension: {e:#}"))?;
@@ -152,7 +196,7 @@ pub async fn ensure_agent(state: &Arc<AppState>, model: &str) -> anyhow::Result<
                     bundled: Some(true),
                     available_tools: Vec::new(),
                 },
-                &session.id,
+                &session_id,
             )
             .await
             .map_err(|e| anyhow::anyhow!("add {name} extension: {e:#}"))?;
@@ -161,7 +205,7 @@ pub async fn ensure_agent(state: &Arc<AppState>, model: &str) -> anyhow::Result<
     let handle = AgentHandle {
         agent: Arc::new(agent),
         provider,
-        session_id: session.id,
+        session_id,
         model: model.to_string(),
         cancel_root: CancellationToken::new(),
         turn_lock: Arc::new(Mutex::new(())),
@@ -176,6 +220,133 @@ pub async fn teardown(state: &AppState) {
     if let Some(handle) = state.agent.lock().await.take() {
         handle.cancel_root.cancel();
     }
+}
+
+/// A tool call as replayed into the chat history (always terminal — the
+/// persisted transcript only holds completed turns).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct HistoryToolCall {
+    pub id: String,
+    pub name: String,
+    /// "done" or "failed" — mirrors the UI's ChatToolCall.status, minus the
+    /// live "running" state that only exists mid-stream.
+    pub status: &'static str,
+}
+
+/// One past chat message, shaped for the UI's `ChatMessage` so the frontend
+/// can repaint an in-progress conversation on launch without re-deriving it.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct HistoryMessage {
+    pub id: String,
+    pub role: &'static str, // "user" | "assistant"
+    pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub tool_calls: Vec<HistoryToolCall>,
+}
+
+/// Read the persisted conversation for the remembered session and flatten it
+/// into UI messages. Empty when there's no session yet or it holds no messages.
+///
+/// Applies the same role/content rules as `translate_events`: assistant text
+/// and thinking become the visible answer; tool requests/responses become tool
+/// chips; user-role text that merely carries tool output is dropped so it can't
+/// masquerade as a user prompt. Tool results are matched back to their request
+/// by id to mark success/failure.
+pub async fn history() -> Vec<HistoryMessage> {
+    let Some(session_id) = load_session_pointer() else {
+        return Vec::new();
+    };
+    let manager = SessionManager::instance();
+    let Ok(session) = manager.get_session(&session_id, true).await else {
+        return Vec::new();
+    };
+    match session.conversation {
+        Some(conversation) => shape_history(conversation.messages()),
+        None => Vec::new(),
+    }
+}
+
+/// Pure transcript-shaping: the testable core of `history()`, split out so it
+/// can be exercised without a SessionManager/DB. See `history()` for the rules.
+fn shape_history(messages: &[goose::conversation::message::Message]) -> Vec<HistoryMessage> {
+    // First pass: which tool-call ids failed (tool responses ride on later
+    // user-role messages, so we resolve status before shaping the transcript).
+    let mut failed: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for msg in messages {
+        for content in &msg.content {
+            if let MessageContent::ToolResponse(resp) = content {
+                let ok = resp
+                    .tool_result
+                    .as_ref()
+                    .map(|r| r.is_error != Some(true))
+                    .unwrap_or(false);
+                if !ok {
+                    failed.insert(resp.id.clone());
+                }
+            }
+        }
+    }
+
+    let mut out = Vec::new();
+    for (i, msg) in messages.iter().enumerate() {
+        let assistant = msg.role == Role::Assistant;
+        // A user message that carries a tool response is a tool-output frame,
+        // not a real prompt — its text is raw tool data the model saw, so we
+        // must not replay it as if the user typed it. Genuine prompts are
+        // user-role messages with no tool response.
+        let is_tool_output = !assistant
+            && msg
+                .content
+                .iter()
+                .any(|c| matches!(c, MessageContent::ToolResponse(_)));
+        let mut text = String::new();
+        let mut thinking = String::new();
+        let mut tool_calls = Vec::new();
+
+        for content in &msg.content {
+            match content {
+                // Assistant answer text, or a genuine user prompt.
+                MessageContent::Text(t) if assistant || !is_tool_output => text.push_str(&t.text),
+                MessageContent::Thinking(t) if assistant => thinking.push_str(&t.thinking),
+                MessageContent::ToolRequest(req) => {
+                    let name = req
+                        .tool_call
+                        .as_ref()
+                        .map(|c| c.name.to_string())
+                        .unwrap_or_else(|_| "tool".to_string());
+                    tool_calls.push(HistoryToolCall {
+                        status: if failed.contains(&req.id) {
+                            "failed"
+                        } else {
+                            "done"
+                        },
+                        id: req.id.clone(),
+                        name,
+                    });
+                }
+                // User-role text (incl. tool output) and tool responses carry
+                // no visible content of their own.
+                _ => {}
+            }
+        }
+
+        // Skip messages that produced nothing to show (e.g. a user-role message
+        // that only carried a tool response).
+        if text.is_empty() && thinking.is_empty() && tool_calls.is_empty() {
+            continue;
+        }
+
+        out.push(HistoryMessage {
+            id: msg.id.clone().unwrap_or_else(|| format!("h-{i}")),
+            role: if assistant { "assistant" } else { "user" },
+            text,
+            thinking: (!thinking.is_empty()).then_some(thinking),
+            tool_calls,
+        });
+    }
+    out
 }
 
 /// One frame of the chat SSE stream, in the order the UI consumes them.
@@ -443,6 +614,67 @@ mod tests {
         ])
         .await;
         assert_eq!(frames, vec![Frame::Error("boom".into()), Frame::Done]);
+    }
+
+    // ---- history shaping ----
+
+    #[test]
+    fn history_pairs_user_prompts_with_assistant_answers() {
+        let msgs = vec![
+            Message::user().with_text("hi there"),
+            Message::assistant().with_text("hello!"),
+        ];
+        let out = shape_history(&msgs);
+        assert_eq!(out.len(), 2);
+        assert_eq!((out[0].role, out[0].text.as_str()), ("user", "hi there"));
+        assert_eq!((out[1].role, out[1].text.as_str()), ("assistant", "hello!"));
+    }
+
+    // User-role messages that only carry tool output must not resurface as
+    // phantom user prompts (same rule the live translator enforces).
+    #[test]
+    fn history_drops_toolonly_user_messages() {
+        let msgs = vec![
+            Message::assistant().with_tool_request(
+                "t1",
+                Ok(CallToolRequestParams::new("developer".to_string())),
+            ),
+            Message::user()
+                .with_text("raw tool output")
+                .with_tool_response("t1", Ok(CallToolResult::success(vec![]))),
+            Message::assistant().with_text("done"),
+        ];
+        let out = shape_history(&msgs);
+        // The tool-request assistant msg (a chip), then the final answer; the
+        // tool-output user message is dropped.
+        assert_eq!(out.len(), 2);
+        assert!(out.iter().all(|m| m.text != "raw tool output"));
+        assert_eq!(out[0].tool_calls.len(), 1);
+        assert_eq!(out[0].tool_calls[0].status, "done");
+        assert_eq!(out[1].text, "done");
+    }
+
+    // A failed tool response marks its request chip as failed, matched by id.
+    #[test]
+    fn history_marks_failed_tool_calls() {
+        let msgs = vec![
+            Message::assistant().with_tool_request(
+                "t1",
+                Ok(CallToolRequestParams::new("developer".to_string())),
+            ),
+            Message::user().with_tool_response(
+                "t1",
+                Err(ErrorData::new(ErrorCode::INTERNAL_ERROR, "boom", None)),
+            ),
+        ];
+        let out = shape_history(&msgs);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].tool_calls[0].status, "failed");
+    }
+
+    #[test]
+    fn history_is_empty_for_no_messages() {
+        assert!(shape_history(&[]).is_empty());
     }
 
     // A dropped receiver (client disconnected) must end translation promptly

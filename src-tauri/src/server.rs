@@ -25,6 +25,8 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/app/join", post(app_join))
         .route("/app/invite", get(app_invite))
         .route("/app/chat", post(app_chat))
+        .route("/app/history", get(app_history))
+        .route("/app/new_chat", post(app_new_chat))
         .route("/app/shutdown", post(app_shutdown))
         .route("/app/reset", post(app_reset))
         .route("/api/{*path}", any(proxy::proxy))
@@ -189,6 +191,22 @@ async fn app_chat(State(state): State<Arc<AppState>>, Json(req): Json<ChatReques
     )
     .keep_alive(KeepAlive::default())
     .into_response()
+}
+
+/// The persisted conversation, shaped for the chat UI to repaint on launch.
+/// Empty array when there's no ongoing chat (first run or just after reset).
+/// Independent of node state — reading history doesn't need a running mesh.
+async fn app_history() -> Response {
+    Json(crate::agent::history().await).into_response()
+}
+
+/// "New chat": forget the remembered session so the next turn starts fresh,
+/// and drop the live agent so it re-reads the (now absent) pointer. The old
+/// conversation stays in goose's store, just no longer the active one.
+async fn app_new_chat(State(state): State<Arc<AppState>>) -> Response {
+    crate::agent::clear_session_pointer();
+    crate::agent::teardown(&state).await;
+    Json(json!({ "ok": true })).into_response()
 }
 
 async fn app_shutdown(State(state): State<Arc<AppState>>) -> Response {

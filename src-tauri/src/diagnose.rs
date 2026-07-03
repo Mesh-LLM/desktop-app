@@ -91,7 +91,12 @@ pub fn diagnose() -> DiagnoseReport {
         disk_free_display: format_disk(disk_free_bytes),
     };
 
-    let recommended_name = auto_model_pack(vram_gb).into_iter().next();
+    // mesh-console's opinionated overlay gets first say on the recommendation
+    // for this machine size; only fall back to upstream's auto_model_pack when
+    // no overlay model claims the machine.
+    let recommended_name = crate::models::recommended_for(vram_gb)
+        .map(|m| m.name.clone())
+        .or_else(|| auto_model_pack(vram_gb).into_iter().next());
     let recommended = recommended_name.clone().map(|name| RecommendedModel {
         reason: format!("Best fit for {} of AI memory", hardware.vram_display),
         name,
@@ -104,22 +109,30 @@ pub fn diagnose() -> DiagnoseReport {
         })
     };
 
-    let mut catalog: Vec<CatalogEntry> = MODEL_CATALOG
+    let entry_from = |name: &str, file: &str, size: &str, description: &str, draft: bool| {
+        let size_gb = parse_size_gb(size);
+        CatalogEntry {
+            fit: fit_code(size_gb, vram_gb),
+            installed: is_installed(file, name),
+            recommended: recommended_name.as_deref() == Some(name),
+            draft,
+            name: name.to_string(),
+            file: file.to_string(),
+            size: size.to_string(),
+            size_gb,
+            description: description.to_string(),
+        }
+    };
+
+    // mesh-console's overlay models first, then the upstream catalog.
+    let mut catalog: Vec<CatalogEntry> = crate::models::OVERLAY_MODELS
         .iter()
-        .map(|m| {
-            let size_gb = parse_size_gb(&m.size);
-            CatalogEntry {
-                fit: fit_code(size_gb, vram_gb),
-                installed: is_installed(&m.file, &m.name),
-                recommended: recommended_name.as_deref() == Some(m.name.as_str()),
-                draft: m.draft.is_some(),
-                name: m.name.clone(),
-                file: m.file.clone(),
-                size: m.size.clone(),
-                size_gb,
-                description: m.description.clone(),
-            }
-        })
+        .map(|m| entry_from(&m.name, &m.file, &m.size, &m.description, false))
+        .chain(
+            MODEL_CATALOG
+                .iter()
+                .map(|m| entry_from(&m.name, &m.file, &m.size, &m.description, m.draft.is_some())),
+        )
         .collect();
 
     // Recommended first, then by fit class, then larger models first within a class.

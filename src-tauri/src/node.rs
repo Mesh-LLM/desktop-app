@@ -11,6 +11,16 @@ use std::time::Duration;
 /// in seconds. Used when join-and-share is requested without an explicit model.
 pub const DEFAULT_MODEL: &str = "unsloth/Qwen3-0.6B-GGUF:Q4_K_M";
 
+/// Translate a model string into what mesh-llm's resolver needs. Overlay models
+/// (mesh-console's own picks, see `models.rs`) aren't in mesh-llm's catalog, so
+/// their display name is swapped for the Hugging Face ref. Everything else —
+/// upstream catalog ids and raw HF refs — passes through unchanged.
+fn resolve_model_ref(model: &str) -> String {
+    crate::models::resolve_ref(model)
+        .unwrap_or(model)
+        .to_string()
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct HostRequest {
     pub model: String,
@@ -60,7 +70,10 @@ pub async fn start_join(state: Arc<AppState>, req: JoinRequest) {
 
 async fn run_host(state: &Arc<AppState>, req: HostRequest) -> Result<()> {
     ensure_runtime(state).await?;
-    ensure_model(state, &req.model).await?;
+    // The UI sends the display name; the resolver/download need the HF ref for
+    // overlay models. Keep req.model for the UI phase, use the ref for serving.
+    let model_ref = resolve_model_ref(&req.model);
+    ensure_model(state, &model_ref).await?;
 
     state
         .set_phase(Phase::Starting {
@@ -71,7 +84,7 @@ async fn run_host(state: &Arc<AppState>, req: HostRequest) -> Result<()> {
 
     let mut builder = MeshNode::builder()
         .serve()
-        .model(&req.model)
+        .model(&model_ref)
         .api_port(state.ports.api)
         // The console port still serves the node's management API (used by the
         // proxy, invite token, and serve/unserve). The embedded web console UI
@@ -113,7 +126,7 @@ async fn run_join(state: &Arc<AppState>, mut req: JoinRequest) -> Result<()> {
         }
         ensure_runtime(state).await?;
         if let Some(model) = &req.model {
-            ensure_model(state, model).await?;
+            ensure_model(state, &resolve_model_ref(model)).await?;
         }
     }
 
@@ -147,7 +160,7 @@ async fn run_join(state: &Arc<AppState>, mut req: JoinRequest) -> Result<()> {
     if req.share
         && let Some(model) = &req.model
     {
-        builder = builder.model(model);
+        builder = builder.model(resolve_model_ref(model));
     }
 
     let node = builder.start().await.context("joining mesh")?;

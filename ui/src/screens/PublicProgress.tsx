@@ -300,10 +300,6 @@ function ShareBody({
   const isRuntime = phase.phase === 'installing_runtime'
   const isDownloading = phase.phase === 'downloading'
   const isStarting = phase.phase === 'starting' || phase.phase === 'idle'
-  const modelName = isDownloading
-    ? phase.model
-    : (phase.phase === 'starting' && phase.model) || 'your model'
-
   const stages: Array<{ id: string; label: string; state: StageState }> = [
     {
       id: 'engine',
@@ -312,7 +308,7 @@ function ShareBody({
     },
     {
       id: 'download',
-      label: `Download ${modelName}`,
+      label: 'Download the model',
       state: isRuntime ? 'pending' : isDownloading ? 'active' : 'done',
     },
     {
@@ -325,7 +321,7 @@ function ShareBody({
   const heading = isRuntime
     ? 'Preparing your Mac’s AI engine…'
     : isDownloading
-      ? `Downloading ${modelName}`
+      ? 'Downloading model…'
       : 'Joining the global mesh…'
   const sub = isRuntime
     ? 'A one-time download so models can run on this Mac.'

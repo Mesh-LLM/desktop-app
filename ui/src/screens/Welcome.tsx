@@ -94,7 +94,8 @@ export default function Welcome({ onJoinPublic, onJoin, onHost }: WelcomeProps) 
           <Card data-testid="welcome-host" onClick={onHost}>
             <div className="text-[15px] font-semibold">Start your own mesh</div>
             <p className="mt-1.5 text-[13px] text-ink-muted">
-              A private mesh for you and the people you invite.
+              A private mesh for you and the people you invite. The more you invite, the smarter the
+              mesh gets.
             </p>
           </Card>
         </div>

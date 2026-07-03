@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    Hardened Runtime entitlements. The hardened runtime is REQUIRED for
+    notarization; Tauri enables it automatically when signing with a real
+    Developer ID identity. These relaxations are needed because Mesh:
+      - embeds mesh-llm with the `dynamic-native-runtime` feature, which
+        dlopen()s native inference libraries at runtime. Library validation
+        would refuse to load libs not signed by the same Team ID.
+      - runs an embedded WebView (JIT) and native inference (JIT-compiled
+        kernels / executable memory).
+    Trim these back if a given build doesn't actually need them.
+  -->
+
+  <!-- Allow loading libraries not signed by our Team ID (dynamic-native-runtime). -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+
+  <!-- WebView + inference runtimes need JIT / executable memory. -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+
+  <!-- Some runtimes set DYLD_* env vars for their own dylibs. -->
+  <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+  <true/>
+</dict>
+</plist>

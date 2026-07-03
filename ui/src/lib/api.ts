@@ -42,11 +42,6 @@ export const appApi = {
       }),
     }).then((r) => json<{ ok: boolean }>(r)),
   invite: () => fetch('/app/invite').then((r) => json<{ token: string; approx_bytes: number }>(r)),
-  /** Open the node's web console in the system default browser. */
-  openConsole: () =>
-    fetch('/app/open_console', { method: 'POST' }).then((r) =>
-      json<{ ok: boolean; url: string }>(r),
-    ),
   shutdown: () => fetch('/app/shutdown', { method: 'POST' }).then((r) => json<{ ok: boolean }>(r)),
   reset: () => fetch('/app/reset', { method: 'POST' }).then((r) => json<{ ok: boolean }>(r)),
   /** Models already downloaded on this Mac (catalog names). */

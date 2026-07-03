@@ -329,14 +329,6 @@ export default function Main({ onLeave, onStartSharing }: MainProps) {
                 >
                   Leave this mesh…
                 </button>
-                <hr className="my-3 border-edge" />
-                <button
-                  data-testid="open-console"
-                  onClick={() => void appApi.openConsole().catch(() => {})}
-                  className="text-[13px] text-ink-muted hover:text-ink"
-                >
-                  Open advanced console ↗
-                </button>
               </div>
             )}
           </div>

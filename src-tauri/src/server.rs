@@ -28,7 +28,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/app/serve_model", post(app_serve_model))
         .route("/app/unserve_model", post(app_unserve_model))
         .route("/app/chat", post(app_chat))
-        .route("/app/open_console", post(app_open_console))
         .route("/app/shutdown", post(app_shutdown))
         .route("/app/reset", post(app_reset))
         .route("/api/{*path}", any(proxy::proxy))
@@ -282,27 +281,6 @@ async fn app_chat(State(state): State<Arc<AppState>>, Json(req): Json<ChatReques
     .into_response()
 }
 
-/// Open the node's web console in the system default browser. The webview
-/// swallows target=_blank anchors, so the frontend asks the backend to open
-/// it — which also keeps working when driven from a plain browser.
-async fn app_open_console(State(state): State<Arc<AppState>>) -> Response {
-    if !matches!(state.phase().await, Phase::Running(_)) {
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({ "error": "node_not_running" })),
-        )
-            .into_response();
-    }
-    let url = format!("http://127.0.0.1:{}", state.ports.console);
-    match open::that_detached(&url) {
-        Ok(()) => Json(json!({ "ok": true, "url": url })).into_response(),
-        Err(err) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "error": format!("{err:#}") })),
-        )
-            .into_response(),
-    }
-}
 
 async fn app_shutdown(State(state): State<Arc<AppState>>) -> Response {
     match node::shutdown(&state).await {

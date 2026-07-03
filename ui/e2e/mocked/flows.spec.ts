@@ -350,24 +350,6 @@ test('appearance setting flips to light mode and persists across reload', async 
   await expect(page.locator('html')).toHaveClass(/dark/)
 })
 
-test('settings opens the advanced console through the backend', async ({ page }) => {
-  await installMockBackend(page, { startRunning: true })
-  await page.goto('/')
-  await expect(page.getByTestId('mesh-name')).toBeVisible()
-
-  await page.getByTestId('settings-button').click()
-  await page.getByTestId('open-console').click()
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          (window as unknown as { __mockState: { openConsoleCalls: unknown[] } }).__mockState
-            .openConsoleCalls.length,
-      ),
-    )
-    .toBe(1)
-})
-
 test('invite modal shows QR and copyable code from the main window', async ({ page }) => {
   // Boot directly into running state
   await installMockBackend(page, { startRunning: true })

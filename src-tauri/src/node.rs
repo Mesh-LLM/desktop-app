@@ -73,10 +73,10 @@ async fn run_host(state: &Arc<AppState>, req: HostRequest) -> Result<()> {
         .serve()
         .model(&req.model)
         .api_port(state.ports.api)
+        // The console port still serves the node's management API (used by the
+        // proxy, invite token, and serve/unserve). The embedded web console UI
+        // is intentionally not served — this app has its own UI on :4640.
         .console_port(state.ports.console)
-        // Serve the embedded operator console at the console port's root —
-        // "Open advanced console" points there. Off by default (headless).
-        .console_ui(true)
         .startup_timeout(Duration::from_secs(180));
     if let Some(name) = &req.mesh_name {
         builder = builder.mesh_name(name);
@@ -141,9 +141,8 @@ async fn run_join(state: &Arc<AppState>, mut req: JoinRequest) -> Result<()> {
     }
     builder = builder
         .api_port(state.ports.api)
+        // Management API only; no embedded web console (see run_host).
         .console_port(state.ports.console)
-        // Same embedded operator console as the host path (see run_host).
-        .console_ui(true)
         .startup_timeout(Duration::from_secs(180));
     if req.share
         && let Some(model) = &req.model

@@ -149,7 +149,6 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
       serveCalls: [] as Json[],
       unserveCalls: [] as Json[],
       shutdownCalls: [] as Json[],
-      openConsoleCalls: [] as Json[],
     }
 
     // ---- EventSource mock ----
@@ -351,10 +350,6 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
         // passive→contributor upgrade relies on.
         emitApp({ type: 'phase', phase: 'idle' })
         return json({ ok: true })
-      }
-      if (path === '/app/open_console') {
-        state.openConsoleCalls.push({})
-        return json({ ok: true, url: 'http://127.0.0.1:3131' })
       }
       if (path === '/api/status') return json(STATUS)
       if (path === '/api/models') return json({ mesh_models: [] })

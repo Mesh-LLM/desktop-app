@@ -4617,25 +4617,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "is-docker"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "928bae27f42bc99b60d9ac7334e3a21d10ad8f1835a4e12ec3ec0464765ed1b3"
-dependencies = [
- "once_cell",
-]
-
-[[package]]
-name = "is-wsl"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "173609498df190136aa7dea1a91db051746d339e18476eed5ca40521f02d7aa5"
-dependencies = [
- "is-docker",
- "once_cell",
-]
-
-[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5256,7 +5237,6 @@ dependencies = [
  "mesh-llm-sdk",
  "mesh-llm-system",
  "mime_guess",
- "open",
  "reqwest 0.12.28",
  "rmcp",
  "rust-embed",
@@ -5679,9 +5659,7 @@ dependencies = [
 [[package]]
 name = "mesh-llm-ui"
 version = "0.72.1"
-dependencies = [
- "include_dir",
-]
+source = "git+https://github.com/Mesh-LLM/mesh-llm#b4b33ef8cdf97017db5fb64ff6cebc3c9c6fa3b7"
 
 [[package]]
 name = "mesh-mixture-of-agents"
@@ -6763,16 +6741,6 @@ name = "opaque-debug"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
-
-[[package]]
-name = "open"
-version = "5.3.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd8d3b65c44123a56e0133d2cd06ce4361bd3ca99d41198b2f25e3c3db9b8b4a"
-dependencies = [
- "is-wsl",
- "libc",
-]
 
 [[package]]
 name = "openai-frontend"

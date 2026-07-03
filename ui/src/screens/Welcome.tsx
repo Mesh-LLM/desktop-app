@@ -42,8 +42,8 @@ export default function Welcome({ onJoinPublic, onJoin, onHost }: WelcomeProps) 
             Your own AI. On your own machines.
           </h1>
           <p className="mt-3 text-[15px] text-ink-muted">
-            Chat with a powerful AI that runs on Macs you and your people own — not in someone
-            else&rsquo;s cloud.
+            A powerful AI that runs on computers you own — not in someone else&rsquo;s cloud. Pool
+            more computers to make it smarter.
           </p>
         </div>
 

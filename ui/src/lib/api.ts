@@ -1,5 +1,4 @@
 import type {
-  CatalogEntry,
   ChatCompletedInfo,
   DiagnoseReport,
   Phase,
@@ -44,22 +43,6 @@ export const appApi = {
   invite: () => fetch('/app/invite').then((r) => json<{ token: string; approx_bytes: number }>(r)),
   shutdown: () => fetch('/app/shutdown', { method: 'POST' }).then((r) => json<{ ok: boolean }>(r)),
   reset: () => fetch('/app/reset', { method: 'POST' }).then((r) => json<{ ok: boolean }>(r)),
-  /** Models already downloaded on this Mac (catalog names). */
-  installedModels: () => fetch('/app/installed_models').then((r) => json<CatalogEntry[]>(r)),
-  /** Turn a downloaded model on for serving on this (serving) node. */
-  serveModel: (model: string) =>
-    fetch('/app/serve_model', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model }),
-    }).then((r) => json<unknown>(r)),
-  /** Stop serving a model on this node. */
-  unserveModel: (model: string) =>
-    fetch('/app/unserve_model', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model }),
-    }).then((r) => json<unknown>(r)),
 }
 
 export const nodeApi = {

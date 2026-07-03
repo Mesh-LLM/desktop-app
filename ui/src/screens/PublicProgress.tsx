@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Button, ProgressBar, Spinner } from '../components/ui'
-import { appApi, formatBytes } from '../lib/api'
+import { formatBytes } from '../lib/api'
 import { useApp } from '../lib/store'
-import type { CatalogEntry, DownloadProgress, Phase } from '../lib/types'
+import type { DownloadProgress, Phase } from '../lib/types'
 
 const GLOBAL_MESH_LINES = [
   'You’re joining machines around the world — end-to-end encrypted in transit.',
@@ -13,12 +13,12 @@ const GLOBAL_MESH_LINES = [
 ]
 
 interface PublicProgressProps {
-  /** passive = chat-only connect; share = contributor serving a model. */
+  /** passive = chat-only connect; share = contributor sharing this Mac's compute. */
   flavor: 'public-passive' | 'public-share'
-  /** Model queued to share once the connection is up (passive flavor). */
+  /** Set once a compute-share upgrade is queued (the mesh picks the model). */
   pendingShare: string | null
-  onShareModel: (model: string) => void
-  onBrowseModels: () => void
+  /** Kick off the "share this Mac's compute" upgrade (runs the hardware check). */
+  onShareCompute: () => void
   onStartChatting: () => void
   onCancel: () => void
   onErrorReset: () => void
@@ -70,8 +70,7 @@ function StageChecklist({
 export default function PublicProgress({
   flavor,
   pendingShare,
-  onShareModel,
-  onBrowseModels,
+  onShareCompute,
   onStartChatting,
   onCancel,
   onErrorReset,
@@ -114,8 +113,7 @@ export default function PublicProgress({
       {flavor === 'public-passive' ? (
         <PassiveBody
           pendingShare={pendingShare}
-          onShareModel={onShareModel}
-          onBrowseModels={onBrowseModels}
+          onShareCompute={onShareCompute}
           onStartChatting={onStartChatting}
         />
       ) : (
@@ -147,35 +145,17 @@ export default function PublicProgress({
  *  useful in the resting ready state. */
 function PassiveBody({
   pendingShare,
-  onShareModel,
-  onBrowseModels,
+  onShareCompute,
   onStartChatting,
 }: {
   pendingShare: string | null
-  onShareModel: (model: string) => void
-  onBrowseModels: () => void
+  onShareCompute: () => void
   onStartChatting: () => void
 }) {
   const { phase } = useApp()
-  const [installed, setInstalled] = useState<CatalogEntry[]>([])
   // Cosmetic beat: the backend reports one "starting" phase for the whole
   // connect, so the middle stage advances on time, not on state.
   const [beat, setBeat] = useState(0)
-
-  useEffect(() => {
-    let cancelled = false
-    appApi
-      .installedModels()
-      .then((list) => {
-        if (!cancelled) setInstalled(list.filter((m) => !m.draft))
-      })
-      .catch(() => {
-        /* offer degrades to the browse link */
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   useEffect(() => {
     const t = setTimeout(() => setBeat(1), 2_200)
@@ -208,7 +188,7 @@ function PassiveBody({
       ? 'You’re on the global mesh.'
       : 'Connecting to the global mesh…'
   const sub = switching
-    ? `Reconnecting with ${pendingShare} — takes a moment, and chat starts fresh.`
+    ? 'Setting this Mac up to share its compute — takes a moment, and chat starts fresh.'
     : ready
       ? 'Chat with models other machines are running — nothing runs on this Mac.'
       : 'Nothing downloads onto this Mac — you’ll chat with models other machines are already running.'
@@ -236,47 +216,22 @@ function PassiveBody({
         className="w-full max-w-xl rounded-(--radius-card) border border-edge bg-panel p-4"
         data-testid="public-upgrade-card"
       >
-        <div className="text-[13px] font-semibold">Also run a model on this Mac?</div>
+        <div className="text-[13px] font-semibold">Share this Mac’s compute?</div>
         <p className="mt-1 text-[12px] text-ink-muted">
-          {installed.length > 0
-            ? 'These are already downloaded — sharing one reconnects you in a moment and makes the mesh stronger.'
-            : 'Serve a model to everyone in the mesh — we’ll check what this Mac can run first.'}
+          Contribute this Mac’s power to the mesh — we’ll check what it can run and pick the best
+          model for it. Makes the whole mesh stronger.
         </p>
-        {installed.length > 0 && (
-          <ul className="mt-2 flex flex-col gap-1">
-            {installed.slice(0, 3).map((m) => {
-              const queued = pendingShare === m.name
-              return (
-                <li key={m.name}>
-                  <button
-                    data-testid={`public-share-${m.name}`}
-                    disabled={pendingShare !== null}
-                    onClick={() => onShareModel(m.name)}
-                    className="group flex w-full items-center gap-2 rounded-(--radius-control) px-1.5 py-1 text-left transition-colors enabled:hover:bg-inset disabled:cursor-default"
-                  >
-                    <span className="truncate font-mono text-[12px]">{m.name}</span>
-                    <span
-                      className={`ml-auto rounded-full border px-2 py-0.5 font-mono text-[10px] ${
-                        queued
-                          ? 'border-accent/50 text-accent'
-                          : 'border-edge text-ink-faint group-hover:border-accent/50 group-hover:text-accent'
-                      }`}
-                    >
-                      {queued ? (switching ? 'Switching…' : 'Once connected…') : 'Share'}
-                    </span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        )}
         <button
-          data-testid="public-browse-models"
+          data-testid="public-share-compute"
           disabled={pendingShare !== null}
-          onClick={onBrowseModels}
+          onClick={onShareCompute}
           className="mt-2 text-[12px] text-accent underline-offset-2 hover:underline disabled:opacity-40"
         >
-          Browse all models…
+          {pendingShare !== null
+            ? switching
+              ? 'Switching…'
+              : 'Setting up…'
+            : 'Share this Mac’s compute…'}
         </button>
       </div>
     </>

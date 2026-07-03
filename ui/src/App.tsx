@@ -252,8 +252,7 @@ export default function App() {
           <PublicProgress
             flavor={view.flavor}
             pendingShare={pendingShare}
-            onShareModel={queueShareUpgrade}
-            onBrowseModels={() => setView({ name: 'public-upgrade-setup' })}
+            onShareCompute={() => setView({ name: 'public-upgrade-setup' })}
             onStartChatting={() => setView({ name: 'main' })}
             onCancel={cancel}
             onErrorReset={errorReset}

@@ -24,9 +24,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/app/host", post(app_host))
         .route("/app/join", post(app_join))
         .route("/app/invite", get(app_invite))
-        .route("/app/installed_models", get(app_installed_models))
-        .route("/app/serve_model", post(app_serve_model))
-        .route("/app/unserve_model", post(app_unserve_model))
         .route("/app/chat", post(app_chat))
         .route("/app/shutdown", post(app_shutdown))
         .route("/app/reset", post(app_reset))
@@ -116,93 +113,6 @@ async fn app_invite(State(state): State<Arc<AppState>>) -> Response {
         )
             .into_response(),
     }
-}
-
-/// Installed (already-downloaded) catalog models, for the running mesh view's
-/// "this Mac's models" list. Cheap — no hardware survey.
-async fn app_installed_models() -> Response {
-    match tokio::task::spawn_blocking(diagnose::installed_catalog).await {
-        Ok(models) => Json(models).into_response(),
-        Err(err) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "error": format!("{err:#}") })),
-        )
-            .into_response(),
-    }
-}
-
-#[derive(serde::Deserialize)]
-struct ModelRequest {
-    model: String,
-}
-
-/// Turn on a downloaded model on this (serving) node via the node's runtime
-/// load API. A no-op-ish 503 on a chat-only client, which has no runtime.
-async fn app_serve_model(
-    State(state): State<Arc<AppState>>,
-    Json(req): Json<ModelRequest>,
-) -> Response {
-    if !matches!(state.phase().await, Phase::Running(_)) {
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({ "error": "node_not_running" })),
-        )
-            .into_response();
-    }
-    let url = format!(
-        "http://127.0.0.1:{}/api/runtime/models",
-        state.ports.console
-    );
-    match state
-        .http
-        .post(&url)
-        .json(&json!({ "model": req.model }))
-        .send()
-        .await
-    {
-        Ok(resp) => relay_node_json(resp).await,
-        Err(err) => (
-            StatusCode::BAD_GATEWAY,
-            Json(json!({ "error": format!("{err:#}") })),
-        )
-            .into_response(),
-    }
-}
-
-/// Turn off a model this node is serving. Model identifiers come from
-/// `/app/installed_models` (catalog names — no slashes to escape).
-async fn app_unserve_model(
-    State(state): State<Arc<AppState>>,
-    Json(req): Json<ModelRequest>,
-) -> Response {
-    if !matches!(state.phase().await, Phase::Running(_)) {
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({ "error": "node_not_running" })),
-        )
-            .into_response();
-    }
-    let url = format!(
-        "http://127.0.0.1:{}/api/runtime/models/{}",
-        state.ports.console,
-        req.model.trim()
-    );
-    match state.http.delete(&url).send().await {
-        Ok(resp) => relay_node_json(resp).await,
-        Err(err) => (
-            StatusCode::BAD_GATEWAY,
-            Json(json!({ "error": format!("{err:#}") })),
-        )
-            .into_response(),
-    }
-}
-
-/// Relay a node management-API JSON response back to the frontend, preserving
-/// its status code.
-async fn relay_node_json(resp: reqwest::Response) -> Response {
-    let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
-    let body = resp.bytes().await.unwrap_or_default();
-    (status, [(header::CONTENT_TYPE, "application/json")], body).into_response()
 }
 
 #[derive(serde::Deserialize)]

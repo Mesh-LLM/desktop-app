@@ -14,6 +14,10 @@ pub struct HardwareReport {
     pub vram_gb: f64,
     pub vram_display: String,
     pub hostname: Option<String>,
+    /// Free space on the volume that holds the model cache. Zero if the probe
+    /// failed (the UI shows "—" rather than a wrong number).
+    pub disk_free_bytes: u64,
+    pub disk_free_display: String,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -72,6 +76,9 @@ pub fn diagnose() -> DiagnoseReport {
     let survey = hardware::survey();
     let vram_gb = survey.vram_bytes as f64 / 1e9;
 
+    let cache_dir = default_huggingface_cache_dir();
+    let disk_free_bytes = free_disk_bytes(&cache_dir);
+
     let hardware = HardwareReport {
         gpu_name: survey.gpu_name.clone(),
         gpu_count: survey.gpu_count,
@@ -80,37 +87,52 @@ pub fn diagnose() -> DiagnoseReport {
         vram_gb,
         vram_display: format_rated_capacity(survey.vram_bytes),
         hostname: survey.hostname.clone(),
+        disk_free_bytes,
+        disk_free_display: format_disk(disk_free_bytes),
     };
 
-    let recommended_name = auto_model_pack(vram_gb).into_iter().next();
+    // mesh-console's opinionated overlay gets first say on the recommendation
+    // for this machine size; only fall back to upstream's auto_model_pack when
+    // no overlay model claims the machine.
+    let recommended_name = crate::models::recommended_for(vram_gb)
+        .map(|m| m.name.clone())
+        .or_else(|| auto_model_pack(vram_gb).into_iter().next());
     let recommended = recommended_name.clone().map(|name| RecommendedModel {
         reason: format!("Best fit for {} of AI memory", hardware.vram_display),
         name,
     });
 
-    let installed = scan_installed_models(default_huggingface_cache_dir());
+    let installed = scan_installed_models(&cache_dir);
     let is_installed = |file: &str, name: &str| {
         installed.iter().any(|m| {
             m.path.file_name().and_then(|f| f.to_str()) == Some(file) || m.model_ref.contains(name)
         })
     };
 
-    let mut catalog: Vec<CatalogEntry> = MODEL_CATALOG
+    let entry_from = |name: &str, file: &str, size: &str, description: &str, draft: bool| {
+        let size_gb = parse_size_gb(size);
+        CatalogEntry {
+            fit: fit_code(size_gb, vram_gb),
+            installed: is_installed(file, name),
+            recommended: recommended_name.as_deref() == Some(name),
+            draft,
+            name: name.to_string(),
+            file: file.to_string(),
+            size: size.to_string(),
+            size_gb,
+            description: description.to_string(),
+        }
+    };
+
+    // mesh-console's overlay models first, then the upstream catalog.
+    let mut catalog: Vec<CatalogEntry> = crate::models::OVERLAY_MODELS
         .iter()
-        .map(|m| {
-            let size_gb = parse_size_gb(&m.size);
-            CatalogEntry {
-                fit: fit_code(size_gb, vram_gb),
-                installed: is_installed(&m.file, &m.name),
-                recommended: recommended_name.as_deref() == Some(m.name.as_str()),
-                draft: m.draft.is_some(),
-                name: m.name.clone(),
-                file: m.file.clone(),
-                size: m.size.clone(),
-                size_gb,
-                description: m.description.clone(),
-            }
-        })
+        .map(|m| entry_from(&m.name, &m.file, &m.size, &m.description, false))
+        .chain(
+            MODEL_CATALOG
+                .iter()
+                .map(|m| entry_from(&m.name, &m.file, &m.size, &m.description, m.draft.is_some())),
+        )
         .collect();
 
     // Recommended first, then by fit class, then larger models first within a class.
@@ -125,6 +147,83 @@ pub fn diagnose() -> DiagnoseReport {
         hardware,
         recommended,
         catalog,
+    }
+}
+
+/// The catalog entries whose weights are already downloaded, minus draft
+/// (speculative-decoding) models. Cheap: skips the hardware survey, so the
+/// running mesh view can list "what this Mac already has" without a full scan.
+pub fn installed_catalog() -> Vec<CatalogEntry> {
+    let installed = scan_installed_models(default_huggingface_cache_dir());
+    let is_installed = |file: &str, name: &str| {
+        installed.iter().any(|m| {
+            m.path.file_name().and_then(|f| f.to_str()) == Some(file) || m.model_ref.contains(name)
+        })
+    };
+
+    MODEL_CATALOG
+        .iter()
+        .filter(|m| m.draft.is_none() && is_installed(&m.file, &m.name))
+        .map(|m| CatalogEntry {
+            // No hardware context here, so fit is a placeholder the mesh view
+            // ignores — these weights are already on disk.
+            fit: "comfortable",
+            installed: true,
+            recommended: false,
+            draft: false,
+            name: m.name.clone(),
+            file: m.file.clone(),
+            size: m.size.clone(),
+            size_gb: parse_size_gb(&m.size),
+            description: m.description.clone(),
+        })
+        .collect()
+}
+
+/// Free bytes on the volume backing `path`. macOS-only shell-out to `df` (the
+/// app never ships elsewhere); returns 0 on any parse/exec failure so the UI
+/// can fall back to "—" instead of showing a wrong figure.
+fn free_disk_bytes(path: &std::path::Path) -> u64 {
+    // `df` needs an existing path; walk up to the nearest ancestor that exists
+    // (the HF cache dir may not be created until the first download).
+    let mut probe = path;
+    while !probe.exists() {
+        match probe.parent() {
+            Some(parent) => probe = parent,
+            None => return 0,
+        }
+    }
+    let output = match std::process::Command::new("df")
+        .args(["-k", "-P"])
+        .arg(probe)
+        .output()
+    {
+        Ok(output) if output.status.success() => output,
+        _ => return 0,
+    };
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // POSIX `df -P` prints a header then one data line; the 4th column is
+    // available 1K-blocks.
+    stdout
+        .lines()
+        .nth(1)
+        .and_then(|line| line.split_whitespace().nth(3))
+        .and_then(|kb| kb.parse::<u64>().ok())
+        .map(|kb| kb * 1024)
+        .unwrap_or(0)
+}
+
+fn format_disk(bytes: u64) -> String {
+    if bytes == 0 {
+        return "—".to_string();
+    }
+    let gb = bytes as f64 / 1e9;
+    if gb >= 1000.0 {
+        format!("{:.1} TB", gb / 1000.0)
+    } else if gb >= 10.0 {
+        format!("{} GB", gb.round() as u64)
+    } else {
+        format!("{gb:.1} GB")
     }
 }
 
@@ -163,5 +262,29 @@ mod tests {
             "expected the full curated catalog"
         );
         assert!(report.hardware.vram_bytes > 0);
+        // The disk probe runs against a real volume in the dev/CI sandbox.
+        assert!(
+            report.hardware.disk_free_bytes > 0,
+            "expected a real free-disk figure"
+        );
+        assert_ne!(report.hardware.disk_free_display, "—");
+    }
+
+    #[test]
+    fn installed_catalog_is_installed_non_draft_subset() {
+        // Content depends on the machine's cache, but the invariants hold
+        // regardless: every entry is installed and never a draft model.
+        for entry in installed_catalog() {
+            assert!(entry.installed);
+            assert!(!entry.draft);
+        }
+    }
+
+    #[test]
+    fn format_disk_scales_and_falls_back() {
+        assert_eq!(format_disk(0), "—");
+        assert_eq!(format_disk(512 * 1_000_000_000), "512 GB");
+        assert_eq!(format_disk(2_500 * 1_000_000_000), "2.5 TB");
+        assert_eq!(format_disk(4_400_000_000), "4.4 GB");
     }
 }

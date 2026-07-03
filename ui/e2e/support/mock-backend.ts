@@ -9,6 +9,12 @@ import type { Page } from '@playwright/test'
 export interface MockOptions {
   /** Boot the mock already in the running state (skips onboarding). */
   startRunning?: boolean
+  /** Overrides merged into the running phase when startRunning is set — e.g.
+   *  boot as a public chat-only join instead of the default private host. */
+  runningPhase?: Record<string, unknown>
+  /** Make /app/diagnose report a model already downloaded, so PowerSetup takes
+   *  the "you've already got models" fast path instead of the scan beat. */
+  installedInDiagnose?: boolean
 }
 
 export async function installMockBackend(page: Page, options: MockOptions = {}) {
@@ -25,6 +31,8 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
         vram_gb: 115.4,
         vram_display: '128 GB',
         hostname: 'test-mac.local',
+        disk_free_bytes: 812000000000,
+        disk_free_display: '812 GB',
       },
       recommended: {
         name: 'Qwen3-Coder-Next-Q4_K_M',
@@ -60,7 +68,7 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
           size_gb: 0.397,
           description: 'Small and quick.',
           fit: 'comfortable',
-          installed: true,
+          installed: false,
           recommended: false,
           draft: false,
         },
@@ -77,6 +85,33 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
         },
       ],
     }
+
+    // The mesh view's "models on this Mac" list. Qwen3-0.6B matches the mock's
+    // serving_models (→ shows "On"); GLM is downloaded but off.
+    const INSTALLED = [
+      {
+        name: 'Qwen3-0.6B-Q4_K_M',
+        file: 't.gguf',
+        size: '397MB',
+        size_gb: 0.397,
+        description: 'Small and quick.',
+        fit: 'comfortable',
+        installed: true,
+        recommended: false,
+        draft: false,
+      },
+      {
+        name: 'GLM-4.7-Flash-Q4_K_M',
+        file: 'g.gguf',
+        size: '18GB',
+        size_gb: 18,
+        description: 'Fast, capable all-rounder for everyday use.',
+        fit: 'comfortable',
+        installed: true,
+        recommended: false,
+        draft: false,
+      },
+    ]
 
     const MODEL_ID = 'unsloth/Qwen3-0.6B-GGUF:Q4_K_M'
     const STATUS = {
@@ -105,10 +140,15 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
       mesh_name: null,
     }
     const state = {
-      phase: (opts.startRunning ? RUNNING_PHASE : { phase: 'idle' }) as Json,
+      phase: (opts.startRunning
+        ? { ...RUNNING_PHASE, ...(opts.runningPhase ?? {}) }
+        : { phase: 'idle' }) as Json,
       hostCalls: [] as Json[],
       joinCalls: [] as Json[],
       chatCalls: [] as Json[],
+      serveCalls: [] as Json[],
+      unserveCalls: [] as Json[],
+      shutdownCalls: [] as Json[],
     }
 
     // ---- EventSource mock ----
@@ -152,9 +192,11 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
     const runLaunchSequence = async (target: Json, download: boolean) => {
-      emitApp({ type: 'phase', phase: 'installing_runtime' })
-      await sleep(120)
+      // Chat-only joins skip the runtime/model beats entirely, mirroring the
+      // real backend (node.rs run_join only installs when share=true).
       if (download) {
+        emitApp({ type: 'phase', phase: 'installing_runtime' })
+        await sleep(120)
         emitApp({ type: 'phase', phase: 'downloading', model: target.model ?? 'model' })
         // Long enough (~2s) for the UI's windowed rate/ETA to appear and be
         // asserted before the phase moves on.
@@ -185,7 +227,7 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
         invite_token: TOKEN,
         api_port: 9337,
         console_port: 3131,
-        mesh_name: null,
+        mesh_name: target.mesh_name ?? null,
       })
     }
 
@@ -257,7 +299,17 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
       const path = new URL(url, location.origin).pathname
 
       if (path === '/app/state') return json(state.phase)
-      if (path === '/app/diagnose') return json(DIAGNOSE)
+      if (path === '/app/diagnose') {
+        if (opts.installedInDiagnose) {
+          return json({
+            ...DIAGNOSE,
+            catalog: (DIAGNOSE.catalog as Json[]).map((m) =>
+              m.name === 'Qwen3-0.6B-Q4_K_M' ? { ...m, installed: true } : m,
+            ),
+          })
+        }
+        return json(DIAGNOSE)
+      }
       if (path === '/app/host') {
         const body = JSON.parse(String(init?.body ?? '{}'))
         state.hostCalls.push(body)
@@ -271,14 +323,32 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
         const body = JSON.parse(String(init?.body ?? '{}'))
         state.joinCalls.push(body)
         void runLaunchSequence(
-          { mode: 'join', model: body.model, visibility: 'private', serving: Boolean(body.share) },
+          {
+            mode: 'join',
+            model: body.model,
+            visibility: body.public ? 'public' : 'private',
+            serving: Boolean(body.share),
+            mesh_name: body.public ? 'Global mesh' : null,
+          },
           Boolean(body.share),
         )
         return json({ ok: true }, 202)
       }
       if (path === '/app/invite') return json({ token: TOKEN, approx_bytes: TOKEN.length })
+      if (path === '/app/installed_models') return json(INSTALLED)
+      if (path === '/app/serve_model') {
+        state.serveCalls.push(JSON.parse(String(init?.body ?? '{}')))
+        return json({ loaded: 'ok' }, 201)
+      }
+      if (path === '/app/unserve_model') {
+        state.unserveCalls.push(JSON.parse(String(init?.body ?? '{}')))
+        return json({ ok: true })
+      }
       if (path === '/app/shutdown' || path === '/app/reset') {
-        state.phase = { phase: 'idle' }
+        if (path === '/app/shutdown') state.shutdownCalls.push({})
+        // Emit (not just mutate) so the store sees the running→idle hop the
+        // passive→contributor upgrade relies on.
+        emitApp({ type: 'phase', phase: 'idle' })
         return json({ ok: true })
       }
       if (path === '/api/status') return json(STATUS)

@@ -19,15 +19,22 @@ export default function PowerSetup({ onBack, onModelChosen }: PowerSetupProps) {
   const [report, setReport] = useState<DiagnoseReport | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [revealed, setRevealed] = useState(0)
-  const [step, setStep] = useState<'scan' | 'reveal' | 'models'>('scan')
+  const [step, setStep] = useState<'scan' | 'reveal' | 'models' | 'installed'>('scan')
   const [selected, setSelected] = useState<string | null>(null)
+  // Set once the user explicitly re-runs the check from the installed picker,
+  // so we run the full scan → reveal instead of bouncing back to 'installed'.
+  const [rescan, setRescan] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     appApi
       .diagnose()
       .then((r) => {
-        if (!cancelled) setReport(r)
+        if (cancelled) return
+        setReport(r)
+        // Already got models on disk? Skip the scan beat and let the user pick
+        // one straight away — they can re-run the check to swap.
+        if (r.catalog.some((m) => m.installed && !m.draft)) setStep('installed')
       })
       .catch((err) => {
         if (!cancelled) setError(String(err))
@@ -43,7 +50,8 @@ export default function PowerSetup({ onBack, onModelChosen }: PowerSetupProps) {
     if (step !== 'scan') return
     if (revealed >= SCAN_LINES.length) {
       if (report) {
-        const t = setTimeout(() => setStep('reveal'), 500)
+        const hasInstalled = report.catalog.some((m) => m.installed && !m.draft)
+        const t = setTimeout(() => setStep(hasInstalled && !rescan ? 'installed' : 'reveal'), 500)
         return () => clearTimeout(t)
       }
       return
@@ -52,7 +60,7 @@ export default function PowerSetup({ onBack, onModelChosen }: PowerSetupProps) {
     if (revealed === SCAN_LINES.length - 1 && !report && !error) return
     const t = setTimeout(() => setRevealed((n) => n + 1), SCAN_BEAT_MS)
     return () => clearTimeout(t)
-  }, [step, revealed, report, error])
+  }, [step, revealed, report, error, rescan])
 
   if (error) {
     return (
@@ -75,7 +83,7 @@ export default function PowerSetup({ onBack, onModelChosen }: PowerSetupProps) {
       case 'AI memory':
         return hw?.vram_display ?? '—'
       case 'Free disk':
-        return '—' // PoC: disk check arrives with download errors instead
+        return hw?.disk_free_display ?? '—'
       case 'Best model':
         return report.recommended?.name ?? '—'
     }
@@ -122,6 +130,77 @@ export default function PowerSetup({ onBack, onModelChosen }: PowerSetupProps) {
 
   if (!report) return null
   const recommended = report.catalog.find((m) => m.recommended) ?? report.catalog[0]
+
+  if (step === 'installed') {
+    const installedModels = report.catalog.filter((m) => m.installed && !m.draft)
+    const chosen = selected ?? installedModels[0]?.name ?? null
+    return (
+      <div
+        className="relative flex h-screen flex-col items-center gap-5 px-8 py-14"
+        data-testid="installed-screen"
+      >
+        <BackButton onClick={onBack} />
+        <div className="w-full max-w-2xl text-center">
+          <h1 className="text-[26px] font-bold tracking-tight">You&rsquo;ve already got models.</h1>
+          <p className="mt-2 text-[15px] text-ink-muted">
+            Pick one to run — it&rsquo;s already downloaded, so this is instant.
+          </p>
+          <p className="mt-2 font-mono text-[12px] text-ink-faint">
+            {hw?.gpu_name} &middot; {hw?.vram_display} AI memory &middot; {hw?.disk_free_display}{' '}
+            free
+          </p>
+        </div>
+        <div className="w-full max-w-2xl grow overflow-y-auto rounded-(--radius-card) border border-edge">
+          {installedModels.map((m) => (
+            <button
+              key={m.name}
+              data-testid={`installed-row-${m.name}`}
+              onClick={() => setSelected(m.name)}
+              className={`flex w-full flex-col gap-1 border-b border-edge bg-panel p-4 text-left last:border-b-0 hover:bg-inset ${
+                chosen === m.name ? 'bg-inset' : ''
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <span
+                  className={`h-3 w-3 rounded-full border ${
+                    chosen === m.name ? 'border-accent bg-accent' : 'border-ink-faint'
+                  }`}
+                  aria-hidden
+                />
+                <span className="font-mono text-[14px] font-semibold">{m.name}</span>
+                <span className="rounded-full border border-good/40 px-2 py-0.5 text-[11px] text-good">
+                  Downloaded
+                </span>
+                <span className="ml-auto w-16 text-right font-mono text-[12px] text-ink-faint">
+                  {m.size}
+                </span>
+              </div>
+              <p className="pl-6 text-[13px] text-ink-muted">{m.description}</p>
+            </button>
+          ))}
+        </div>
+        <Button
+          data-testid="use-installed"
+          disabled={!chosen}
+          onClick={() => chosen && onModelChosen(chosen, report)}
+        >
+          Use this model
+        </Button>
+        <button
+          data-testid="rerun-diagnostic"
+          className="text-sm text-ink-muted underline-offset-4 hover:text-ink hover:underline"
+          onClick={() => {
+            setRescan(true)
+            setSelected(null)
+            setRevealed(0)
+            setStep('scan')
+          }}
+        >
+          Run the hardware check &amp; see all models
+        </button>
+      </div>
+    )
+  }
 
   if (step === 'reveal') {
     return (

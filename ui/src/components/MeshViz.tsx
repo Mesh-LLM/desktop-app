@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useResolvedTheme } from '../lib/theme'
 
 interface MeshVizProps {
   /** ambient = dim fullscreen backdrop; mini = sidebar live view */
@@ -19,9 +20,13 @@ interface Dot {
   me?: boolean
 }
 
-const ACCENT = '#4cc2e8'
-const GOOD = '#3fd08a'
-const LINE = 'rgba(76, 194, 232, 0.14)'
+/** #rrggbb → rgba(); canvas 2D can't use color-mix, so alpha is applied here. */
+function withAlpha(hex: string, alpha: number): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex.trim())
+  if (!m) return hex
+  const n = parseInt(m[1], 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
+}
 
 export default function MeshViz({
   variant,
@@ -31,6 +36,7 @@ export default function MeshViz({
 }: MeshVizProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamingRef = useRef(streaming)
+  const theme = useResolvedTheme()
 
   useEffect(() => {
     streamingRef.current = streaming
@@ -41,6 +47,14 @@ export default function MeshViz({
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
+
+    // Resolve the theme's colors once per (re)mount; the `theme` dep re-runs
+    // this effect on a light/dark switch.
+    const css = getComputedStyle(document.documentElement)
+    const ACCENT = css.getPropertyValue('--color-accent').trim() || '#4cc2e8'
+    const GOOD = css.getPropertyValue('--color-good').trim() || '#3fd08a'
+    const INK_MUTED = css.getPropertyValue('--color-ink-muted').trim() || '#9aa1ad'
+    const LINE = withAlpha(ACCENT, 0.14)
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     let raf = 0
@@ -122,12 +136,12 @@ export default function MeshViz({
 
       // dots
       for (const d of dots) {
-        ctx.fillStyle = d.me ? ACCENT : variant === 'mini' ? GOOD : 'rgba(154,161,173,0.5)'
+        ctx.fillStyle = d.me ? ACCENT : variant === 'mini' ? GOOD : withAlpha(INK_MUTED, 0.5)
         ctx.beginPath()
         ctx.arc(d.x * w, d.y * h, d.r * dpr, 0, Math.PI * 2)
         ctx.fill()
         if (d.me) {
-          ctx.strokeStyle = 'rgba(76,194,232,0.35)'
+          ctx.strokeStyle = withAlpha(ACCENT, 0.35)
           ctx.beginPath()
           ctx.arc(d.x * w, d.y * h, d.r * dpr * 2.2, 0, Math.PI * 2)
           ctx.stroke()
@@ -145,7 +159,7 @@ export default function MeshViz({
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', onResize)
     }
-  }, [variant, peers])
+  }, [variant, peers, theme])
 
   return <canvas ref={canvasRef} className={className} data-testid={`mesh-viz-${variant}`} />
 }

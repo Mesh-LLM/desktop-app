@@ -58,8 +58,9 @@ untestable UI layer).
 
 - **mesh-llm**: git deps on `Mesh-LLM/mesh-llm`, UNPINNED (tracks main via
   Cargo.lock; currently v0.72.1 @ b4b33ef8). Crates: `mesh-llm-sdk` (serving),
-  `mesh-llm-host-runtime` (default-features off → no web-ui; feature
-  `dynamic-native-runtime`), `mesh-llm-node`, `mesh-llm-events`,
+  `mesh-llm-host-runtime` (default-features off → native runtime only, no
+  embedded web console; feature `dynamic-native-runtime`), `mesh-llm-node`,
+  `mesh-llm-events`,
   `mesh-llm-system` (hardware detection), `mesh-llm-client` (model catalog,
   `auto_model_pack`).
 - **goose**: `aaif-goose/goose` PINNED `rev = "31bc265a"` (same as mesh-app),

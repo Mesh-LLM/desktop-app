@@ -31,7 +31,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `npm run preview -- --port ${PREVIEW_PORT} --strictPort`,
+    // --host 127.0.0.1 so vite preview binds the loopback interface the
+    // health-check (url below) polls; without it vite binds only localhost
+    // (IPv6 ::1) and the 127.0.0.1 probe times out.
+    command: `npm run preview -- --port ${PREVIEW_PORT} --strictPort --host 127.0.0.1`,
     url: `http://127.0.0.1:${PREVIEW_PORT}`,
     reuseExistingServer: true,
   },

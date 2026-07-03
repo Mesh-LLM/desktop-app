@@ -236,7 +236,7 @@ export default function Chat({
               data-testid="chat-send"
               onClick={() => void send(input)}
               disabled={!input.trim() || !selectedModel}
-              className="rounded-(--radius-control) bg-accent px-4 py-3 text-sm font-bold text-[#06222e] disabled:opacity-40"
+              className="rounded-(--radius-control) bg-accent px-4 py-3 text-sm font-bold text-accent-ink disabled:opacity-40"
               aria-label="Send"
             >
               ↑

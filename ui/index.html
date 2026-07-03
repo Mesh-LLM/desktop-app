@@ -4,6 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mesh</title>
+    <script>
+      // Pre-paint mirror of lib/theme.ts so a light-theme user never sees a
+      // dark flash while the bundle loads.
+      try {
+        var themePref = localStorage.getItem('mesh-theme')
+        if (
+          themePref === 'light' ||
+          (themePref === 'system' && matchMedia('(prefers-color-scheme: light)').matches)
+        ) {
+          document.documentElement.classList.remove('dark')
+          document.documentElement.classList.add('light')
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

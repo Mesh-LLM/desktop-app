@@ -49,9 +49,7 @@ test('chat streams a reply with thinking folded away and a tok/s stamp', async (
   const chatCalls = await page.evaluate(
     () => (window as unknown as { __mockState: { chatCalls: unknown[] } }).__mockState.chatCalls,
   )
-  expect(chatCalls).toEqual([
-    { model: 'auto', text: 'Say hello from the mesh' },
-  ])
+  expect(chatCalls).toEqual([{ model: 'auto', text: 'Say hello from the mesh' }])
 })
 
 test('agent tool activity shows as a chip that completes', async ({ page }) => {

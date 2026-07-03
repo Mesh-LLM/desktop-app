@@ -22,8 +22,9 @@ tauri-build = { version = "2", features = [] }
 # mesh-llm crates come from the upstream repo, pinned by Cargo.lock; bump with
 # `cargo update -p mesh-llm-sdk` (etc.) to track main.
 mesh-llm-sdk = { git = "https://github.com/Mesh-LLM/mesh-llm", features = ["serving"] }
-# default-features = false: the default `web-ui` feature embeds the operator
-# console's React build (and requires its npm toolchain); we ship our own UI.
+# default-features = false; only the native runtime is needed. The upstream
+# "web-ui" feature (embedded operator console on port 3131) is intentionally
+# left off — this app ships its own UI on :4640 and doesn't expose it.
 mesh-llm-host-runtime = { git = "https://github.com/Mesh-LLM/mesh-llm", default-features = false, features = ["dynamic-native-runtime"] }
 mesh-llm-node = { git = "https://github.com/Mesh-LLM/mesh-llm" }
 mesh-llm-events = { git = "https://github.com/Mesh-LLM/mesh-llm" }

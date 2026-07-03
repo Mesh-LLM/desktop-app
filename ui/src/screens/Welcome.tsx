@@ -4,12 +4,12 @@ import { Card, ReassuranceLine } from '../components/ui'
 import { looksLikeInviteToken } from '../lib/api'
 
 interface WelcomeProps {
+  onJoinPublic: () => void
   onJoin: (prefillToken?: string) => void
   onHost: () => void
-  onPublic: () => void
 }
 
-export default function Welcome({ onJoin, onHost, onPublic }: WelcomeProps) {
+export default function Welcome({ onJoinPublic, onJoin, onHost }: WelcomeProps) {
   const [clipboardToken, setClipboardToken] = useState<string | null>(null)
 
   useEffect(() => {
@@ -58,37 +58,46 @@ export default function Welcome({ onJoin, onHost, onPublic }: WelcomeProps) {
           </button>
         )}
 
+        {/* The hero: THE global mesh. */}
+        <button
+          data-testid="welcome-public"
+          onClick={onJoinPublic}
+          className="group relative w-full overflow-hidden rounded-(--radius-card) border border-accent/60 bg-accent/[0.07] p-6 text-left transition-all hover:border-accent hover:bg-accent/[0.12] focus-visible:outline-2 focus-visible:outline-accent"
+        >
+          <div className="flex items-center gap-2">
+            <span aria-hidden>&#127760;</span>
+            <span className="text-[11px] font-semibold tracking-wider text-accent uppercase">
+              Join the global mesh
+            </span>
+          </div>
+          <div className="mt-2 text-[22px] font-bold tracking-tight">One worldwide AI mesh.</div>
+          <p className="mt-2 max-w-lg text-sm text-ink-muted">
+            Thousands of machines of every size, pooling their compute and a whole variety of expert
+            models — always on, no account, end-to-end encrypted. You can be part of it.
+          </p>
+          <div className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-accent">
+            Join now
+            <span className="transition-transform group-hover:translate-x-0.5" aria-hidden>
+              &rarr;
+            </span>
+          </div>
+        </button>
+
+        {/* Secondary front doors. */}
         <div className="grid w-full grid-cols-2 gap-4">
           <Card data-testid="welcome-join" onClick={() => onJoin()}>
-            <div className="text-[17px] font-semibold">Join a mesh</div>
-            <p className="mt-2 text-sm text-ink-muted">
-              Someone sent you an invite code? Start here.
+            <div className="text-[15px] font-semibold">Join with an invite code</div>
+            <p className="mt-1.5 text-[13px] text-ink-muted">
+              Someone sent you a code for their private mesh.
             </p>
-            <div className="mt-4 text-right text-accent" aria-hidden>
-              &rarr;
-            </div>
           </Card>
           <Card data-testid="welcome-host" onClick={onHost}>
-            <div className="text-[17px] font-semibold">Start my own mesh</div>
-            <p className="mt-2 text-sm text-ink-muted">
-              Put this Mac&rsquo;s power to work and invite others in.
+            <div className="text-[15px] font-semibold">Start your own mesh</div>
+            <p className="mt-1.5 text-[13px] text-ink-muted">
+              A private mesh for you and the people you invite.
             </p>
-            <div className="mt-4 text-right text-accent" aria-hidden>
-              &rarr;
-            </div>
           </Card>
         </div>
-
-        <Card data-testid="welcome-public" onClick={onPublic} className="w-full">
-          <div className="text-[17px] font-semibold">Try the public mesh</div>
-          <p className="mt-2 text-sm text-ink-muted">
-            No invite needed — join a shared community mesh and start chatting in seconds,
-            using models others contribute. No download.
-          </p>
-          <div className="mt-4 text-right text-accent" aria-hidden>
-            &rarr;
-          </div>
-        </Card>
 
         <ReassuranceLine />
       </div>

@@ -9,7 +9,7 @@ export function Button({
   const base =
     'rounded-(--radius-control) px-5 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40 disabled:cursor-not-allowed'
   const styles = {
-    primary: 'bg-accent text-[#06222e] hover:bg-[#6ad0f0]',
+    primary: 'bg-accent text-accent-ink hover:bg-accent-hover',
     quiet: 'border border-edge bg-panel text-ink hover:border-accent/60',
     ghost: 'text-ink-muted hover:text-ink',
   }
@@ -70,6 +70,19 @@ export function ReassuranceLine({ text }: { text?: string }) {
       </svg>
       {text ?? 'Everything stays between your devices — end-to-end encrypted.'}
     </p>
+  )
+}
+
+/** Indeterminate wait state — downloads with real byte progress keep the
+ *  ProgressBar below. Freezes to a plain ring under prefers-reduced-motion. */
+export function Spinner({ className = '' }: { className?: string }) {
+  return (
+    <div
+      role="status"
+      aria-label="Working…"
+      data-testid="spinner"
+      className={`h-9 w-9 animate-spin rounded-full border-[3px] border-inset border-t-accent ${className}`}
+    />
   )
 }
 

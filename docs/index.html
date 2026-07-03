@@ -14,18 +14,18 @@
 <link href="https://fonts.googleapis.com/css2?family=Righteous&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --paper:   #f4e6c5;
-    --cream:   #efdcb0;
-    --ink:     #2b1207;
-    --brown-9: #1f0d05;
-    --brown-8: #2e1408;
-    --brown-7: #43200c;
-    --rust:    #a03005;
-    --red:     #c23e0a;
-    --orange:  #e06010;
-    --amber:   #ef8f1c;
-    --gold:    #f2b02e;
-    --sun:     #e9c94e;
+    --paper:   #e8d5ae;
+    --cream:   #dfc99b;
+    --ink:     #241005;
+    --brown-9: #1a0b04;
+    --brown-8: #291106;
+    --brown-7: #3c1d0a;
+    --rust:    #93300a;
+    --red:     #b23c0e;
+    --orange:  #cd5c12;
+    --amber:   #d9821e;
+    --gold:    #dda32c;
+    --sun:     #d4b544;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -45,25 +45,27 @@
     position: relative;
     min-height: 100vh;
     background:
-      radial-gradient(ellipse 120% 90% at 50% -10%, rgba(224,96,16,.28), transparent 60%),
+      radial-gradient(ellipse 120% 90% at 50% -10%, rgba(160,72,18,.32), transparent 60%),
       repeating-linear-gradient(-38deg,
-        var(--brown-9) 0 90px,
-        var(--brown-8) 90px 180px,
-        #351709 180px 270px,
-        var(--brown-8) 270px 360px);
+        var(--brown-9) 0 46px,
+        var(--brown-8) 46px 92px,
+        #33160a 92px 138px,
+        #241004 138px 184px);
   }
-  .stage::before {          /* vignette */
+  .stage::before {          /* vignette + sepia wash */
     content: "";
     position: fixed; inset: 0;
-    background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(15,6,2,.75) 100%);
+    background:
+      radial-gradient(ellipse at 50% 42%, transparent 38%, rgba(20,8,2,.85) 100%),
+      linear-gradient(180deg, rgba(67,32,12,.18), rgba(31,13,5,.28));
     pointer-events: none;
     z-index: 3;
   }
-  .stage::after {           /* film grain */
+  .stage::after {           /* film grain — heavier */
     content: "";
     position: fixed; inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
-    opacity: .07;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+    opacity: .14;
     mix-blend-mode: overlay;
     pointer-events: none;
     z-index: 4;
@@ -540,48 +542,37 @@
     .arcs { min-width: 640px; min-height: 640px; top: -70vw; right: -70vw; }
   }
 
-  /* ---- hi-fi groove toggle ---- */
-  .hifi {
-    position: fixed;
-    bottom: 18px; right: 18px;
-    z-index: 10;
-    display: flex;
-    align-items: center;
-    gap: .6rem;
-    padding: .55rem 1.1rem;
-    font-family: "Righteous", sans-serif;
-    font-size: .7rem;
-    letter-spacing: .22em;
-    text-transform: uppercase;
-    color: var(--ink);
-    background: linear-gradient(180deg, var(--sun), var(--amber));
+  /* ---- hi-fi unit (TIDAL embed) ---- */
+  .hifi-unit {
+    text-align: center;
+    padding: 1rem 2rem 0;
+  }
+  .hifi-unit .hifi-frame {
+    display: inline-block;
+    padding: 10px 10px 8px;
+    border-radius: 14px;
+    background:
+      repeating-linear-gradient(90deg,
+        #5b3a1e 0px, #6b4526 6px, #55361c 11px, #6b4526 17px),
+      #5b3a1e;
     border: 2px solid var(--ink);
-    border-radius: 999px;
-    cursor: pointer;
-    box-shadow: 0 4px 0 var(--ink), 0 10px 24px rgba(0,0,0,.5);
+    box-shadow:
+      inset 0 2px 0 rgba(255,255,255,.15),
+      0 14px 30px rgba(0,0,0,.5);
   }
-  .hifi:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
-  .hifi .picon { font-size: .85rem; line-height: 1; }
-  .hifi.playing .picon { display: none; }
-  .hifi .eq {
-    display: none; gap: 2px; align-items: flex-end; height: 12px;
+  .hifi-unit iframe {
+    display: block;
+    border: 0;
+    border-radius: 8px;
+    max-width: 100%;
   }
-  .hifi.playing .eq { display: inline-flex; }
-  .hifi:not(.playing) {
-    animation: pulse 1.6s ease-in-out infinite;
+  .hifi-unit .hifi-label {
+    margin-top: .7rem;
+    font-size: .68rem;
+    letter-spacing: .28em;
+    text-transform: uppercase;
+    color: var(--amber);
   }
-  @keyframes pulse {
-    0%, 100% { box-shadow: 0 4px 0 var(--ink), 0 10px 24px rgba(0,0,0,.5); }
-    50% { box-shadow: 0 4px 0 var(--ink), 0 0 22px rgba(242,176,46,.9); }
-  }
-  .hifi .eq i {
-    width: 3px; background: var(--ink); border-radius: 1px;
-    height: 4px;
-  }
-  .hifi.playing .eq i { animation: eq .5s ease-in-out infinite alternate; }
-  .hifi.playing .eq i:nth-child(2) { animation-delay: .15s; }
-  .hifi.playing .eq i:nth-child(3) { animation-delay: .3s; }
-  @keyframes eq { from { height: 3px; } to { height: 12px; } }
 </style>
 </head>
 <body>
@@ -626,6 +617,13 @@
         </div>
       </div>
       <p class="tv-caption">Turn the dial · broadcast in glorious local-first color</p>
+
+      <div class="hifi-unit">
+        <div class="hifi-frame">
+          <iframe src="https://embed.tidal.com/tracks/119723194" width="500" height="120" allow="encrypted-media; fullscreen; clipboard-write https://embed.tidal.com; web-share" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox" style="color-scheme: light dark" title="TIDAL Embed Player"></iframe>
+        </div>
+        <p class="hifi-label">◇ Hi-Fi Console · spin the groove ◇</p>
+      </div>
     </section>
 
     <!-- PITCH -->
@@ -672,47 +670,6 @@
 
   </div>
 </div>
-
-<audio id="groove" src="assets/groove.mp3" loop preload="auto"></audio>
-<button class="hifi" id="hifi" aria-label="Toggle music">
-  <span class="picon" id="picon">▶</span>
-  <span class="eq"><i></i><i></i><i></i></span>
-  <span id="hifi-label">Play the groove</span>
-</button>
-
-<script>
-(function () {
-  var audio = document.getElementById("groove");
-  var btn = document.getElementById("hifi");
-  var label = document.getElementById("hifi-label");
-  audio.volume = 0.55;
-
-  function ui(playing) {
-    btn.classList.toggle("playing", playing);
-    label.textContent = playing ? "Groovin’" : "Play the groove";
-  }
-
-  function play() { audio.play().then(function () { ui(true); }).catch(function () { ui(false); }); }
-
-  btn.addEventListener("click", function () {
-    if (audio.paused) play();
-    else { audio.pause(); ui(false); }
-  });
-
-  // try to autoplay; if the browser blocks it, start on first interaction
-  audio.play().then(function () { ui(true); }).catch(function () {
-    var kick = function () {
-      if (audio.paused) play();
-      ["pointerdown", "keydown", "touchstart"].forEach(function (ev) {
-        window.removeEventListener(ev, kick);
-      });
-    };
-    ["pointerdown", "keydown", "touchstart"].forEach(function (ev) {
-      window.addEventListener(ev, kick, { once: false });
-    });
-  });
-})();
-</script>
 
 <script>
 (function () {

@@ -329,6 +329,47 @@ test('join flow validates the invite code and reaches the main window as chat-on
   expect(joinCalls[0]).toMatchObject({ token: goodToken, share: false })
 })
 
+test('remembers the last mesh and offers "Back to mesh" on a fresh open', async ({ page }) => {
+  // Launch the global mesh as a passive client, reaching the main window.
+  await page.goto('/')
+  await page.getByTestId('welcome-public').click()
+  await page.getByTestId('public-continue').click()
+  await expect(page.getByTestId('start-chatting')).toBeVisible({ timeout: 10_000 })
+  await page.getByTestId('start-chatting').click()
+  await expect(page.getByTestId('mesh-name')).toBeVisible({ timeout: 10_000 })
+
+  // Reload: the mock backend boots Idle again (in-memory), so we land on
+  // Welcome — but the remembered config surfaces a "Back to mesh" banner.
+  await page.reload()
+  await expect(page.getByTestId('resume-banner')).toBeVisible()
+  await expect(page.getByTestId('resume-mesh')).toContainText('global mesh')
+
+  // One click re-launches the same passive public join.
+  await page.getByTestId('resume-mesh').click()
+  await expect(page.getByTestId('start-chatting')).toBeVisible({ timeout: 10_000 })
+  const joinCalls = await page.evaluate(
+    () => (window as unknown as { __mockState: { joinCalls: unknown[] } }).__mockState.joinCalls,
+  )
+  expect(joinCalls[joinCalls.length - 1]).toMatchObject({ public: true, share: false })
+})
+
+test('"Start fresh" forgets the remembered mesh so the banner stays gone', async ({ page }) => {
+  await page.goto('/')
+  await page.getByTestId('welcome-public').click()
+  await page.getByTestId('public-continue').click()
+  await expect(page.getByTestId('start-chatting')).toBeVisible({ timeout: 10_000 })
+
+  await page.reload()
+  await expect(page.getByTestId('resume-banner')).toBeVisible()
+  await page.getByTestId('resume-dismiss').click()
+  await expect(page.getByTestId('resume-banner')).toHaveCount(0)
+
+  // Still gone after another reload — the config was cleared, not just hidden.
+  await page.reload()
+  await expect(page.getByTestId('welcome-public')).toBeVisible()
+  await expect(page.getByTestId('resume-banner')).toHaveCount(0)
+})
+
 test('appearance setting flips to light mode and persists across reload', async ({ page }) => {
   await installMockBackend(page, { startRunning: true })
   await page.goto('/')

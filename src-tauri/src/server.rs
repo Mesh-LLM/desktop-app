@@ -281,6 +281,7 @@ async fn app_chat(State(state): State<Arc<AppState>>, Json(req): Json<ChatReques
     .into_response()
 }
 
+
 async fn app_shutdown(State(state): State<Arc<AppState>>) -> Response {
     match node::shutdown(&state).await {
         Ok(()) => Json(json!({ "ok": true })).into_response(),

@@ -74,6 +74,14 @@ check: fmt-check lint test test-e2e
 bundle:
     ./ui/node_modules/.bin/tauri build
 
+# Signed + notarized Mesh.app + .dmg (Developer ID). Needs APPLE_* env vars.
+release:
+    ./scripts/release-macos.sh
+
+# Signed but NOT notarized (fast local check of the signing path)
+release-signed-only:
+    SKIP_NOTARIZE=1 ./scripts/release-macos.sh
+
 # Remove build artifacts
 clean:
     cargo clean

@@ -8,7 +8,7 @@ const SOVEREIGNTY_LINES = [
   'No account. No cloud. No one listening in.',
   'This model will keep working even with the internet down.',
   'Everything stays between your devices — end-to-end encrypted.',
-  'Invite friends later — their Macs make your mesh stronger.',
+  'Invite friends later — their computers make the mesh more intelligent.',
 ]
 
 interface ProgressProps {

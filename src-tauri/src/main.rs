@@ -110,6 +110,20 @@ fn main() {
                     let _ = tx.send(());
                 });
                 let _ = rx.recv_timeout(std::time::Duration::from_secs(5));
+
+                // Hard-exit BEFORE returning to AppKit's `terminate:`, which
+                // would otherwise call libc `exit()` and run C++ static
+                // destructors. The embedded llama/ggml Metal runtime aborts in
+                // those global destructors (`ggml_metal_rsets_free` →
+                // `ggml_abort` → SIGABRT) because its worker threads are still
+                // live at exit — the "crash on quit" in issue #8. We've already
+                // shut the node down cleanly above; `_exit` ends the process
+                // immediately, skipping the fragile destructor phase entirely.
+                //
+                // Safety: the runtime is torn down; flushing stdio is the only
+                // thing we skip, and we don't rely on it.
+                std::io::Write::flush(&mut std::io::stdout()).ok();
+                unsafe { libc::_exit(0) };
             }
         });
 }

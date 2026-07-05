@@ -125,3 +125,29 @@ test('"New chat" clears the conversation and forgets the session', async ({ page
   // "New chat" is disabled again once the conversation is empty.
   await expect(page.getByTestId('chat-new')).toBeDisabled()
 })
+
+// Regression for #7: GFM markdown (tables etc.) must render as real HTML, not
+// raw pipe-delimited text. Needs remark-gfm + prose-mesh table styling.
+test('renders a markdown table as a real table, not raw pipes', async ({ page }) => {
+  await installMockBackend(page, {
+    startRunning: true,
+    history: [
+      { id: 'h1', role: 'user', text: 'plan a week of dinners' },
+      {
+        id: 'h2',
+        role: 'assistant',
+        text: '| Day | Dinner |\n|-----|--------|\n| Mon | Tacos |\n| Tue | Pasta |',
+      },
+    ],
+  })
+  await page.goto('/')
+  await expect(page.getByTestId('mesh-name')).toBeVisible()
+
+  const answer = page.getByTestId('assistant-text')
+  // Rendered as a real table with the right cells…
+  await expect(answer.locator('table')).toBeVisible()
+  await expect(answer.locator('th', { hasText: 'Day' })).toBeVisible()
+  await expect(answer.locator('td', { hasText: 'Tacos' })).toBeVisible()
+  // …and the raw markdown separator row is gone.
+  await expect(answer).not.toContainText('|-----|')
+})

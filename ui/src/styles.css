@@ -54,6 +54,116 @@ body {
   user-select: none;
 }
 
+/* Assistant markdown. react-markdown + remark-gfm emit plain HTML tags with no
+   default styling, so we theme them here with the app's tokens. Without this,
+   GFM tables render as unstyled cramped rows (and pipes look like raw text). */
+.prose-mesh {
+  color: var(--color-ink);
+  word-break: break-word;
+}
+.prose-mesh > :first-child {
+  margin-top: 0;
+}
+.prose-mesh > :last-child {
+  margin-bottom: 0;
+}
+.prose-mesh p {
+  margin: 0.5em 0;
+}
+.prose-mesh h1,
+.prose-mesh h2,
+.prose-mesh h3,
+.prose-mesh h4 {
+  margin: 1em 0 0.4em;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.prose-mesh h1 {
+  font-size: 1.4em;
+}
+.prose-mesh h2 {
+  font-size: 1.25em;
+}
+.prose-mesh h3 {
+  font-size: 1.1em;
+}
+.prose-mesh ul,
+.prose-mesh ol {
+  margin: 0.5em 0;
+  padding-left: 1.4em;
+}
+.prose-mesh ul {
+  list-style: disc;
+}
+.prose-mesh ol {
+  list-style: decimal;
+}
+.prose-mesh li {
+  margin: 0.2em 0;
+}
+.prose-mesh li > input[type='checkbox'] {
+  margin-right: 0.4em;
+}
+.prose-mesh a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-mesh blockquote {
+  margin: 0.6em 0;
+  padding-left: 0.9em;
+  border-left: 3px solid var(--color-edge);
+  color: var(--color-ink-muted);
+}
+.prose-mesh hr {
+  margin: 1em 0;
+  border: 0;
+  border-top: 1px solid var(--color-edge);
+}
+.prose-mesh code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--color-inset);
+  padding: 0.1em 0.35em;
+  border-radius: 5px;
+}
+.prose-mesh pre {
+  margin: 0.6em 0;
+  padding: 0.8em 1em;
+  background: var(--color-inset);
+  border: 1px solid var(--color-edge);
+  border-radius: var(--radius-control);
+  overflow-x: auto;
+}
+.prose-mesh pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.85em;
+}
+/* GFM tables — the crux of issue #7. */
+.prose-mesh table {
+  margin: 0.7em 0;
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.92em;
+  display: block;
+  overflow-x: auto;
+}
+.prose-mesh th,
+.prose-mesh td {
+  border: 1px solid var(--color-edge);
+  padding: 0.4em 0.7em;
+  text-align: left;
+  vertical-align: top;
+}
+.prose-mesh th {
+  background: var(--color-inset);
+  font-weight: 600;
+}
+.prose-mesh tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--color-inset) 45%, transparent);
+}
+
 /* Work-in-progress text: a light band sweeping across dimmed text (the
    classic "thinking…" shimmer). Falls back to plain faint text when
    reduced motion is preferred (the media block below freezes animations). */

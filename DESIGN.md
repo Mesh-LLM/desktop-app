@@ -147,6 +147,15 @@ untestable UI layer).
 - **rmcp 1.7.0 lock pin** (see §3) — the single most common accidental break.
 - **goose builtin registry empty for embedders** — without
   `register_builtin_extensions`, `ExtensionConfig::Builtin` names fail.
+- **Quit must `_exit`, not fall through to AppKit `terminate:`** (issue #8).
+  The embedded ggml/Metal runtime aborts (`ggml_metal_rsets_free` → SIGABRT)
+  inside its C++ static destructors when libc `exit()` runs them at process
+  teardown. `main.rs`'s `RunEvent::Exit` handler does a clean node shutdown
+  then calls `libc::_exit(0)`, which skips the destructor phase entirely. Don't
+  remove that hard-exit.
+- **Assistant markdown needs `remark-gfm` + `.prose-mesh` CSS** (issue #7).
+  `react-markdown` alone won't parse GFM tables (renders raw pipes), and the
+  emitted tags have no default styling. Both live in `Chat.tsx` / `styles.css`.
 - **MoA floor**: the mesh's virtual model `"mesh"` (Mixture-of-Agents) 503s
   with <2 real models; `"auto"` works with 1+. (Validated in
   `../mesh-app/src-tauri/tests/model_selection.rs`.) Relevant when porting the

@@ -59,7 +59,7 @@ body {
    GFM tables render as unstyled cramped rows (and pipes look like raw text). */
 .prose-mesh {
   color: var(--color-ink);
-  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .prose-mesh > :first-child {
   margin-top: 0;

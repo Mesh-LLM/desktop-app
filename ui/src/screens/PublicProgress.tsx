@@ -1,3 +1,4 @@
+import { Check, ChevronRight, Circle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Button, ProgressBar, Spinner } from '../components/ui'
 import { formatBytes } from '../lib/api'
@@ -49,7 +50,13 @@ function StageChecklist({
           }`}
         >
           <span className={stage.state === 'done' ? 'text-good' : 'text-accent'}>
-            {stage.state === 'done' ? '+' : stage.state === 'active' ? '›' : '·'}
+            {stage.state === 'done' ? (
+              <Check size={14} strokeWidth={2.5} aria-hidden />
+            ) : stage.state === 'active' ? (
+              <ChevronRight size={14} strokeWidth={2.5} aria-hidden />
+            ) : (
+              <Circle size={7} aria-hidden />
+            )}
           </span>
           <span className={stage.state === 'active' ? 'text-ink' : 'text-ink-muted'}>
             {stage.label}
@@ -89,7 +96,7 @@ export default function PublicProgress({
         className="flex h-screen flex-col items-center justify-center gap-6 px-8"
         data-testid="error-screen"
       >
-        <h1 className="text-[26px] font-bold tracking-tight">Something went wrong.</h1>
+        <h1 className="font-display text-[26px] font-bold tracking-tight">Something went wrong.</h1>
         <p className="max-w-lg text-center font-mono text-[13px] break-all text-ink-muted">
           {phase.message}
         </p>
@@ -196,7 +203,10 @@ function PassiveBody({
   return (
     <>
       <div className="text-center">
-        <h1 className="text-[28px] font-bold tracking-tight" data-testid="public-progress-heading">
+        <h1
+          className="font-display text-[28px] font-bold tracking-tight"
+          data-testid="public-progress-heading"
+        >
           {heading}
         </h1>
         <p className="mt-3 max-w-lg text-[15px] text-ink-muted">{sub}</p>
@@ -299,7 +309,10 @@ function ShareBody({
   return (
     <>
       <div className="text-center">
-        <h1 className="text-[28px] font-bold tracking-tight" data-testid="public-progress-heading">
+        <h1
+          className="font-display text-[28px] font-bold tracking-tight"
+          data-testid="public-progress-heading"
+        >
           {heading}
         </h1>
         <p className="mt-3 max-w-lg text-[15px] text-ink-muted">{sub}</p>

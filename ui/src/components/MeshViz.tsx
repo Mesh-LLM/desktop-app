@@ -51,7 +51,7 @@ export default function MeshViz({
     // Resolve the theme's colors once per (re)mount; the `theme` dep re-runs
     // this effect on a light/dark switch.
     const css = getComputedStyle(document.documentElement)
-    const ACCENT = css.getPropertyValue('--color-accent').trim() || '#4cc2e8'
+    const ACCENT = css.getPropertyValue('--color-accent').trim() || '#ff7a00'
     const GOOD = css.getPropertyValue('--color-good').trim() || '#3fd08a'
     const INK_MUTED = css.getPropertyValue('--color-ink-muted').trim() || '#9aa1ad'
     const LINE = withAlpha(ACCENT, 0.14)

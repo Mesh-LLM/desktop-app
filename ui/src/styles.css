@@ -1,25 +1,27 @@
 @import 'tailwindcss';
 
 @theme {
-  /* Semantic tokens — dark is the shipped default; html.light overrides the
-     custom properties below (utilities compile to var(--color-*)). */
-  --color-bg: #0b0d12;
-  --color-panel: #12151c;
-  --color-inset: #181c25;
-  --color-edge: #262b36;
-  --color-ink: #f2f3f5;
-  --color-ink-muted: #9aa1ad;
-  --color-ink-faint: #6a7180;
-  --color-accent: #4cc2e8;
+  /* Semantic tokens — dark is the shipped default; html.light / html.vinyl
+     override the custom properties below (utilities compile to var(--color-*)). */
+  --color-bg: #000000;
+  --color-panel: #0a0a0b;
+  --color-inset: #131315;
+  --color-edge: #232327;
+  --color-ink: #f4f4f5;
+  --color-ink-muted: #a1a1aa;
+  --color-ink-faint: #64646c;
+  --color-accent: #ff7a00;
   /* text on accent-filled controls + accent hover shade */
-  --color-accent-ink: #06222e;
-  --color-accent-hover: #6ad0f0;
+  --color-accent-ink: #211000;
+  --color-accent-hover: #ff9f1c;
   --color-good: #3fd08a;
   --color-warn: #e8b04c;
   --color-bad: #e86a5a;
 
   --font-sans: 'Inter Tight', 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  /* Display face for big headline moments; vinyl swaps in Righteous. */
+  --font-display: 'Inter Tight', 'Inter', system-ui, sans-serif;
 
   --radius-card: 12px;
   --radius-control: 8px;
@@ -38,12 +40,34 @@ html.light {
   --color-ink: #151a22;
   --color-ink-muted: #4e5866;
   --color-ink-faint: #7c8694;
-  --color-accent: #0e8fbe; /* darkened for contrast on white */
+  --color-accent: #d45500; /* darkened blazing orange for contrast on white */
   --color-accent-ink: #ffffff;
-  --color-accent-hover: #0c7da7;
+  --color-accent-hover: #b84700;
   --color-good: #178f5c;
   --color-warn: #a8720d;
   --color-bad: #cf3f2e;
+}
+
+/* Vinyl — the retro-1977 sunset aesthetic from the landing page: warm paper
+   ink on deep brown, amber accent, Righteous display headlines, film grain. */
+html.vinyl {
+  color-scheme: dark;
+  --color-bg: #1a0b04;
+  --color-panel: #291106;
+  --color-inset: #33160a;
+  --color-edge: #4d2610;
+  --color-ink: #e8d5ae;
+  --color-ink-muted: #c4a06b;
+  --color-ink-faint: #8f6c42;
+  --color-accent: #d9821e;
+  --color-accent-ink: #241005;
+  --color-accent-hover: #dda32c;
+  --color-good: #a4a838;
+  --color-warn: #dda32c;
+  --color-bad: #b23c0e;
+
+  --font-sans: 'Space Grotesk', -apple-system, system-ui, sans-serif;
+  --font-display: 'Righteous', 'Space Grotesk', sans-serif;
 }
 
 body {
@@ -52,6 +76,48 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   user-select: none;
+}
+
+/* Vinyl backdrop: faint diagonal stripes + film grain, fixed behind the UI.
+   Kept subtle so panels/chat stay readable; pure decoration, so both layers
+   are pointer-transparent and aria-invisible. */
+html.vinyl body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    -38deg,
+    transparent 0 46px,
+    rgba(41, 17, 6, 0.55) 46px 92px,
+    rgba(51, 22, 10, 0.4) 92px 138px,
+    transparent 138px 184px
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+html.vinyl body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+  opacity: 0.1;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  z-index: 1;
+}
+/* Everything the app renders sits above the vinyl texture layers. */
+html.vinyl #root {
+  position: relative;
+  z-index: 2;
+}
+
+/* Big headline moments pick up the display face (Righteous under vinyl). */
+.font-display {
+  font-family: var(--font-display);
+}
+html.vinyl .font-display {
+  font-weight: 400;
+  letter-spacing: 0.02em;
 }
 
 /* Assistant markdown. react-markdown + remark-gfm emit plain HTML tags with no
@@ -188,6 +254,42 @@ body {
   background-clip: text;
   color: transparent;
   animation: text-shimmer 2s linear infinite;
+}
+
+/* Chat messages slide up and fade in as they land. */
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-message-in {
+  animation: message-in 240ms ease-out both;
+}
+
+/* The blinking caret at the end of streaming assistant text. */
+@keyframes caret-blink {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  56%,
+  100% {
+    opacity: 0;
+  }
+}
+.stream-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--color-accent);
+  animation: caret-blink 1s steps(1) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

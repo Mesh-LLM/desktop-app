@@ -82,6 +82,9 @@ just bundle         # package Mesh.app (ad-hoc signed)
 First real run downloads the tiny test model (Qwen3-0.6B, ~400MB) and the
 Metal native runtime into the shared HF/mesh-llm caches.
 
+For local-development signing, stale-helper, and `/Applications/Mesh.app` vs
+source-run pitfalls, see [docs/development.md](docs/development.md).
+
 ### Gotchas
 
 - **Model downloads skip xet by default** (`HF_HUB_DISABLE_XET=1` set in

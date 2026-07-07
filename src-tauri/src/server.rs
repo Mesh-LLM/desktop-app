@@ -24,6 +24,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/app/host", post(app_host))
         .route("/app/join", post(app_join))
         .route("/app/invite", get(app_invite))
+        .route("/app/pending_invite", get(app_pending_invite))
         .route("/app/chat", post(app_chat))
         .route("/app/history", get(app_history))
         .route("/app/new_chat", post(app_new_chat))
@@ -115,6 +116,18 @@ async fn app_invite(State(state): State<Arc<AppState>>) -> Response {
         )
             .into_response(),
     }
+}
+
+/// Invite token from a `mesh://join/<token>` deep link that arrived before
+/// the frontend's SSE connection was up. One-shot: reading takes the token,
+/// so a later poll (or another window) won't replay it.
+async fn app_pending_invite(State(state): State<Arc<AppState>>) -> Response {
+    let token = state
+        .pending_invite
+        .lock()
+        .expect("pending_invite lock")
+        .take();
+    Json(json!({ "token": token })).into_response()
 }
 
 #[derive(serde::Deserialize)]

@@ -25,7 +25,9 @@ export default function PublicJoin({ onBack, onPassive, onContribute }: PublicJo
     >
       <BackButton onClick={onBack} />
       <div className="text-center">
-        <h1 className="text-[28px] font-bold tracking-tight">How do you want to join?</h1>
+        <h1 className="font-display text-[28px] font-bold tracking-tight">
+          How do you want to join?
+        </h1>
         <p className="mt-2 text-[15px] text-ink-muted">
           Both connect you to the same global mesh. You can change this any time.
         </p>

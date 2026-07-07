@@ -239,7 +239,7 @@ test('host flow: scan → reveal → visibility → progress → mesh live with 
   await expect(page.getByText('Your mesh is live.')).toBeVisible()
   await expect(page.getByTestId('invite-qr').locator('svg')).toBeVisible()
   await page.getByTestId('copy-invite').click()
-  await expect(page.getByTestId('copy-invite')).toHaveText('Copied ✓')
+  await expect(page.getByTestId('copy-invite')).toHaveText('Copied')
 
   // The host call carried the chosen model + visibility
   const hostCalls = await page.evaluate(
@@ -355,6 +355,26 @@ test('appearance setting flips to light mode and persists across reload', async 
   await expect(page.locator('html')).toHaveClass(/dark/)
 })
 
+test('vinyl theme applies the retro palette and persists across reload', async ({ page }) => {
+  await installMockBackend(page, { startRunning: true })
+  await page.goto('/')
+  await expect(page.getByTestId('mesh-name')).toBeVisible()
+
+  await page.getByTestId('settings-button').click()
+  await page.getByTestId('theme-vinyl').click()
+  await expect(page.locator('html')).toHaveClass(/vinyl/)
+  expect(await page.evaluate(() => localStorage.getItem('mesh-theme'))).toBe('vinyl')
+
+  await page.reload()
+  await expect(page.getByTestId('mesh-name')).toBeVisible()
+  await expect(page.locator('html')).toHaveClass(/vinyl/)
+
+  // Back to dark — the shipped default.
+  await page.getByTestId('settings-button').click()
+  await page.getByTestId('theme-dark').click()
+  await expect(page.locator('html')).toHaveClass(/dark/)
+})
+
 test('invite modal shows QR and copyable code from the main window', async ({ page }) => {
   // Boot directly into running state
   await installMockBackend(page, { startRunning: true })
@@ -364,7 +384,7 @@ test('invite modal shows QR and copyable code from the main window', async ({ pa
   await expect(page.getByTestId('invite-modal')).toBeVisible()
   await expect(page.getByTestId('invite-qr').locator('svg')).toBeVisible()
   await page.getByTestId('copy-invite').click()
-  await expect(page.getByTestId('copy-invite')).toHaveText('Copied ✓')
+  await expect(page.getByTestId('copy-invite')).toHaveText('Copied')
   await page.keyboard.press('Escape')
   await expect(page.getByTestId('invite-modal')).not.toBeVisible()
 })

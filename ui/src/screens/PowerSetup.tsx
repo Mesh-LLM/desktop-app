@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import MeshMark from '../components/MeshMark'
 import { BackButton, Button, FitBadge } from '../components/ui'
 import { appApi } from '../lib/api'
 import type { DiagnoseReport } from '../lib/types'
@@ -98,11 +99,9 @@ export default function PowerSetup({ onBack, onModelChosen }: PowerSetupProps) {
         <div className="relative flex h-28 w-28 items-center justify-center">
           <span className="absolute h-full w-full animate-ping rounded-full border border-accent/30" />
           <span className="absolute h-2/3 w-2/3 rounded-full border border-accent/40" />
-          <span className="font-mono text-2xl text-accent" aria-hidden>
-            &#9671;
-          </span>
+          <MeshMark size={30} className="text-accent" pulse />
         </div>
-        <h1 className="text-[28px] font-bold tracking-tight" aria-live="polite">
+        <h1 className="font-display text-[28px] font-bold tracking-tight" aria-live="polite">
           Checking your Mac...
         </h1>
         <div className="flex flex-col gap-2 font-mono text-[14px]">
@@ -141,7 +140,9 @@ export default function PowerSetup({ onBack, onModelChosen }: PowerSetupProps) {
       >
         <BackButton onClick={onBack} />
         <div className="w-full max-w-2xl text-center">
-          <h1 className="text-[26px] font-bold tracking-tight">You&rsquo;ve already got models.</h1>
+          <h1 className="font-display text-[26px] font-bold tracking-tight">
+            You&rsquo;ve already got models.
+          </h1>
           <p className="mt-2 text-[15px] text-ink-muted">
             Pick one to run — it&rsquo;s already downloaded, so this is instant.
           </p>
@@ -209,7 +210,7 @@ export default function PowerSetup({ onBack, onModelChosen }: PowerSetupProps) {
         data-testid="reveal-screen"
       >
         <BackButton onClick={onBack} />
-        <h1 className="text-[28px] font-bold tracking-tight">
+        <h1 className="font-display text-[28px] font-bold tracking-tight">
           Nice machine. Here&rsquo;s what it can do.
         </h1>
         <div className="rounded-full border border-edge bg-panel px-5 py-2 font-mono text-[13px] text-ink-muted">
@@ -260,7 +261,7 @@ export default function PowerSetup({ onBack, onModelChosen }: PowerSetupProps) {
     >
       <BackButton onClick={() => setStep('reveal')} />
       <div className="flex w-full max-w-2xl items-baseline justify-between">
-        <h1 className="text-[24px] font-bold tracking-tight">Pick a model</h1>
+        <h1 className="font-display text-[24px] font-bold tracking-tight">Pick a model</h1>
         <span className="font-mono text-[12px] text-ink-faint">
           {hw?.gpu_name} &middot; {hw?.vram_display} AI memory
         </span>

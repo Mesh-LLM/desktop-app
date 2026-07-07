@@ -163,7 +163,43 @@ untestable UI layer).
 - mesh-llm is unpinned: a `cargo update` can move it; the runtime download is
   version-coupled (release artifacts + skippy ABI must match — mesh-app's
   DESIGN.md §3/§7 has the full story if downloads 404 or ABI-mismatch).
+- **Installed app vs source runs**: `/Applications/Mesh.app`, local bundles,
+  and `just run`/`just backend` share the native runtime cache and can leave
+  stale helpers. If model startup fails with a macOS `dlopen` Team ID / library
+  validation error, verify the launched app has
+  `com.apple.security.cs.disable-library-validation` and kill old
+  `mesh-console`/`mesh-consoled` processes. Full runbook:
+  `docs/development.md`.
 - `ui/.npmrc` vs global `~/.npmrc` (Block artifactory) — see §3.
+
+## 6.5 Theming & invite links (2026-07-07)
+
+- **Three themes + system**: `dark` (absolute black `#000`, the shipped
+  default), `light`, and `vinyl` — the retro-1977 sunset palette from
+  `docs/index.html` (browns/amber/paper, Righteous display font, faint
+  diagonal stripes + film grain via `html.vinyl body::before/::after`).
+  All tokens are CSS custom properties in `ui/src/styles.css`; the theme is a
+  class on `<html>` (`lib/theme.ts`, pre-paint mirror in `ui/index.html`).
+  `--font-display` powers the `font-display` utility for headline moments;
+  vinyl swaps it to Righteous (Google Fonts, loaded in `index.html`).
+- **No emojis / text glyphs in the UI** — iconography is `lucide-react` plus
+  the `MeshMark` brand SVG (`components/MeshMark.tsx`, optional `pulse`).
+- **Chat**: assistant turns render with an avatar-style MeshMark, an
+  `ActivityTrace` panel (collapsible chain of thought with a live last-thought
+  tail while streaming, plus per-tool rows with spinner/check/fail icons), a
+  blinking `stream-caret`, and `animate-message-in` entrances. Markdown via
+  `react-markdown` + `remark-gfm` + `.prose-mesh` (see §6).
+- **Invite links**: `mesh://` is a registered URL scheme
+  (`tauri-plugin-deep-link`, config in `tauri.conf.json`). Accepted shapes:
+  `mesh://join/<token>`, `mesh://join#<token>`, `mesh://join?token=<token>`
+  (`extract_invite_token` in `main.rs`, unit-tested). Tokens are parked in
+  `AppState.pending_invite` and broadcast as an `invite_link` node event;
+  the frontend drains `GET /app/pending_invite` (one-shot) on boot and
+  listens for the SSE event, landing on the join flow prefilled. The
+  shareable link is `https://mesh-llm.github.io/desktop-app/join/#<token>`
+  (`inviteLink()` in `InvitePanel.tsx`) — `docs/join/index.html` is the
+  static landing page (retro-styled, reads the token from `location.hash`
+  only, auto-attempts the `mesh://` bounce, offers copy + download fallback).
 
 ## 7. Roadmap (agreed with micn, 2026-07-02)
 

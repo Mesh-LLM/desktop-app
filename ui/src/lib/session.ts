@@ -57,8 +57,6 @@ export function lastConfigLabel(config: LaunchConfig): string {
     case 'join':
       return 'Back to the mesh you joined'
     case 'host':
-      return config.visibility === 'private'
-        ? 'Back to your private mesh'
-        : 'Back to your mesh'
+      return config.visibility === 'private' ? 'Back to your private mesh' : 'Back to your mesh'
   }
 }

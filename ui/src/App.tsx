@@ -10,12 +10,7 @@ import MeshLive from './screens/MeshLive'
 import Main from './screens/Main'
 import { appApi } from './lib/api'
 import { connect, useApp } from './lib/store'
-import {
-  clearLastConfig,
-  loadLastConfig,
-  saveLastConfig,
-  type LaunchConfig,
-} from './lib/session'
+import { clearLastConfig, loadLastConfig, saveLastConfig, type LaunchConfig } from './lib/session'
 import type { Visibility as Vis } from './lib/types'
 
 type View =
@@ -31,7 +26,7 @@ type View =
   | { name: 'main' }
 
 export default function App() {
-  const { phase } = useApp()
+  const { phase, lastNodeEvent } = useApp()
   const [view, setView] = useState<View>({ name: 'welcome' })
   const [booted, setBooted] = useState(false)
   // A model queued to share on the global mesh. A chat-only client node has no
@@ -50,7 +45,29 @@ export default function App() {
           setView({ name: 'progress', goal: 'host' })
       })
       .finally(() => setBooted(true))
+    // A mesh:// invite link may have launched the app before this frontend was
+    // listening — drain the backend's one-shot buffer and open the join flow.
+    appApi
+      .pendingInvite()
+      .then(({ token }) => {
+        if (token) setView({ name: 'join', prefillToken: token })
+      })
+      .catch(() => {
+        /* older backend without the endpoint — links still arrive via SSE */
+      })
   }, [])
+
+  // Invite links clicked while the app is already running arrive as an
+  // invite_link node event over SSE: jump straight into the join flow.
+  // setState fires from a timer callback (not the effect body) to avoid
+  // cascading renders — react-hooks/set-state-in-effect.
+  useEffect(() => {
+    if (lastNodeEvent?.event !== 'invite_link') return
+    const token = lastNodeEvent.detail.token
+    if (typeof token !== 'string' || token.length === 0) return
+    const t = setTimeout(() => setView({ name: 'join', prefillToken: token }), 0)
+    return () => clearTimeout(t)
+  }, [lastNodeEvent])
 
   // Apply a queued passive→contributor upgrade once the connection is up.
   // No cleanup-cancellation here: the shutdown we issue flips the phase, which

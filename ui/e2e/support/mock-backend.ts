@@ -15,6 +15,9 @@ export interface MockOptions {
   /** Make /app/diagnose report a model already downloaded, so PowerSetup takes
    *  the "you've already got models" fast path instead of the scan beat. */
   installedInDiagnose?: boolean
+  /** Seed GET /app/pending_invite (one-shot), simulating a mesh:// invite
+   *  link that launched the app before the frontend was listening. */
+  pendingInvite?: string
   /** Seed GET /app/history so the chat repaints a prior conversation on mount
    *  (simulates a persistent goose session surviving an app restart). */
   history?: Array<{
@@ -132,6 +135,8 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
       // Mutable so a "New chat" clears the seeded history for later reads.
       history: (opts.history ?? []) as Json[],
       shutdownCalls: [] as Json[],
+      // One-shot: cleared on first read, like the real backend.
+      pendingInvite: (opts.pendingInvite ?? null) as string | null,
     }
 
     // ---- EventSource mock ----
@@ -318,6 +323,11 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
         return json({ ok: true }, 202)
       }
       if (path === '/app/invite') return json({ token: TOKEN, approx_bytes: TOKEN.length })
+      if (path === '/app/pending_invite') {
+        const token = state.pendingInvite
+        state.pendingInvite = null
+        return json({ token })
+      }
       if (path === '/app/shutdown' || path === '/app/reset') {
         if (path === '/app/shutdown') state.shutdownCalls.push({})
         // Emit (not just mutate) so the store sees the running→idle hop the

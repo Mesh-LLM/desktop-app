@@ -57,6 +57,10 @@ tokio = { version = "1", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 tokio-util = "0.7"
 dirs = "6"
+# For libc::_exit on quit — skip C++ static destructors so the embedded ggml
+# Metal runtime can't abort in its global teardown (issue #8). Already in-tree
+# transitively; declared explicitly since we call it directly.
+libc = "0.2"
 futures-util = "0.3"
 mime_guess = "2"
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }

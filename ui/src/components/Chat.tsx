@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { appApi, streamChat } from '../lib/api'
 import type { ChatMessage, ChatToolCall } from '../lib/types'
 
@@ -390,7 +391,7 @@ function AssistantBubble({
         </p>
       )}
       <div className="prose-mesh text-[15px] leading-relaxed" data-testid="assistant-text">
-        <ReactMarkdown>{msg.text}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
         {msg.streaming && msg.text && <span className="animate-pulse font-mono">▍</span>}
       </div>
       {msg.error && <p className="mt-2 text-[13px] text-bad">{msg.error}</p>}

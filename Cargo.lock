@@ -5354,6 +5354,7 @@ dependencies = [
  "goose",
  "goose-mcp",
  "goose-providers",
+ "libc",
  "mesh-llm-client",
  "mesh-llm-events",
  "mesh-llm-host-runtime",

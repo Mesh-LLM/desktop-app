@@ -443,7 +443,7 @@
     margin: 0 auto;
     padding: 3.4rem 2rem 1.6rem;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
     gap: 1.6rem;
   }
   .card {
@@ -540,6 +540,7 @@
   @media (max-width: 640px) {
     .hero { padding-top: 2.5rem; }
     .arcs { min-width: 640px; min-height: 640px; top: -70vw; right: -70vw; }
+    .pitch { grid-template-columns: 1fr; }
   }
 
   /* ---- hi-fi unit (TIDAL embed) ---- */
@@ -639,6 +640,10 @@
       <div class="card">
         <h3><span>03</span>No cloud required</h3>
         <p>Your prompts never leave the mesh. No subscriptions, no metered tokens, no data centre. Very 1977 of us.</p>
+      </div>
+      <div class="card">
+        <h3><span>04</span>Public pool or private mesh</h3>
+        <p>Contribute your Mac to the open global pool, or spin up a private network for family, friends, or the office. Same app — you decide who’s in.</p>
       </div>
     </section>
 

@@ -10,10 +10,10 @@
   --color-ink: #f4f4f5;
   --color-ink-muted: #a1a1aa;
   --color-ink-faint: #64646c;
-  --color-accent: #ff7a00;
+  --color-accent: #ff5a00;
   /* text on accent-filled controls + accent hover shade */
-  --color-accent-ink: #211000;
-  --color-accent-hover: #ff9f1c;
+  --color-accent-ink: #220900;
+  --color-accent-hover: #ff7a00;
   --color-good: #3fd08a;
   --color-warn: #e8b04c;
   --color-bad: #e86a5a;
@@ -40,9 +40,9 @@ html.light {
   --color-ink: #151a22;
   --color-ink-muted: #4e5866;
   --color-ink-faint: #7c8694;
-  --color-accent: #d45500; /* darkened blazing orange for contrast on white */
+  --color-accent: #f04a00; /* saturated blazing orange, dark enough for contrast on white */
   --color-accent-ink: #ffffff;
-  --color-accent-hover: #b84700;
+  --color-accent-hover: #c93d00;
   --color-good: #178f5c;
   --color-warn: #a8720d;
   --color-bad: #cf3f2e;
@@ -59,11 +59,11 @@ html.vinyl {
   --color-ink: #e8d5ae;
   --color-ink-muted: #c4a06b;
   --color-ink-faint: #8f6c42;
-  --color-accent: #d9821e;
-  --color-accent-ink: #241005;
-  --color-accent-hover: #dda32c;
+  --color-accent: #ff5a00;
+  --color-accent-ink: #240800;
+  --color-accent-hover: #ff7a00;
   --color-good: #a4a838;
-  --color-warn: #dda32c;
+  --color-warn: #ffb000;
   --color-bad: #b23c0e;
 
   --font-sans: 'Space Grotesk', -apple-system, system-ui, sans-serif;

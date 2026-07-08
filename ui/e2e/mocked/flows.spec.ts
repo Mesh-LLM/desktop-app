@@ -402,7 +402,9 @@ test('settings view can leave the active mesh', async ({ page }) => {
 
   await expect(page.getByTestId('welcome-public')).toBeVisible()
   const shutdownCalls = await page.evaluate(
-    () => (window as unknown as { __mockState: { shutdownCalls: unknown[] } }).__mockState.shutdownCalls,
+    () =>
+      (window as unknown as { __mockState: { shutdownCalls: unknown[] } }).__mockState
+        .shutdownCalls,
   )
   expect(shutdownCalls).toHaveLength(1)
 })

@@ -1,0 +1,2 @@
+npm --prefix ui run build
+npm --prefix ui run test:e2e

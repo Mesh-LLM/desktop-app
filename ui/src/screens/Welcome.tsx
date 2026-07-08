@@ -1,4 +1,4 @@
-import { Globe, KeyRound, MoveRight, RotateCcw, Sparkles } from 'lucide-react'
+import { Globe, KeyRound, MoveRight, RotateCcw, Settings, Sparkles } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import MeshMark from '../components/MeshMark'
 import MeshViz from '../components/MeshViz'
@@ -14,6 +14,7 @@ interface WelcomeProps {
   onJoinPublic: () => void
   onJoin: (prefillToken?: string) => void
   onHost: () => void
+  onOpenSettings: () => void
 }
 
 export default function Welcome({
@@ -23,6 +24,7 @@ export default function Welcome({
   onJoinPublic,
   onJoin,
   onHost,
+  onOpenSettings,
 }: WelcomeProps) {
   const [clipboardToken, setClipboardToken] = useState<string | null>(null)
   const [dismissed, setDismissed] = useState(false)
@@ -49,6 +51,14 @@ export default function Welcome({
   return (
     <div className="relative flex h-screen flex-col items-center justify-center overflow-hidden">
       <MeshViz variant="ambient" className="absolute inset-0 h-full w-full opacity-60" />
+      <button
+        data-testid="welcome-settings"
+        onClick={onOpenSettings}
+        className="absolute top-5 right-5 z-20 flex items-center gap-1.5 rounded-full border border-edge bg-panel/80 px-3 py-1.5 text-[13px] text-ink-muted backdrop-blur transition-colors hover:border-accent/60 hover:text-ink"
+      >
+        <Settings size={14} aria-hidden />
+        Settings
+      </button>
       <div className="relative z-10 flex w-full max-w-2xl flex-col items-center gap-8 px-8">
         <div className="flex items-center gap-2.5 font-mono text-lg text-accent">
           <MeshMark size={22} /> mesh

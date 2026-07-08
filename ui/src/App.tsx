@@ -8,12 +8,13 @@ import Progress from './screens/Progress'
 import PublicProgress from './screens/PublicProgress'
 import MeshLive from './screens/MeshLive'
 import Main from './screens/Main'
+import SettingsView from './screens/SettingsView'
 import { appApi } from './lib/api'
 import { connect, useApp } from './lib/store'
 import { clearLastConfig, loadLastConfig, saveLastConfig, type LaunchConfig } from './lib/session'
 import type { Visibility as Vis } from './lib/types'
 
-type View =
+type AppView =
   | { name: 'welcome' }
   | { name: 'join'; prefillToken?: string }
   | { name: 'join-setup'; token: string } // power setup for join-and-share
@@ -24,6 +25,8 @@ type View =
   | { name: 'host-visibility'; model: string }
   | { name: 'progress'; goal: 'host' | 'join'; flavor?: 'public-passive' | 'public-share' }
   | { name: 'main' }
+
+type View = AppView | { name: 'settings'; from: AppView }
 
 export default function App() {
   const { phase, lastNodeEvent } = useApp()
@@ -140,6 +143,8 @@ export default function App() {
     if (last) launch(last)
   }
 
+  const openSettings = (from: AppView) => setView({ name: 'settings', from })
+
   const leaveMesh = () => {
     setPendingShare(null)
     clearLastConfig()
@@ -157,6 +162,7 @@ export default function App() {
           onJoinPublic={() => setView({ name: 'public-mode' })}
           onJoin={(prefillToken) => setView({ name: 'join', prefillToken })}
           onHost={() => setView({ name: 'host-setup' })}
+          onOpenSettings={() => openSettings({ name: 'welcome' })}
         />
       )
 
@@ -248,6 +254,7 @@ export default function App() {
         return (
           <Main
             onLeave={leaveMesh}
+            onOpenSettings={() => openSettings({ name: 'main' })}
             onStartSharing={() => setView({ name: 'public-upgrade-setup' })}
           />
         )
@@ -283,7 +290,16 @@ export default function App() {
       return (
         <Main
           onLeave={leaveMesh}
+          onOpenSettings={() => openSettings({ name: 'main' })}
           onStartSharing={() => setView({ name: 'public-upgrade-setup' })}
+        />
+      )
+
+    case 'settings':
+      return (
+        <SettingsView
+          onClose={() => setView(view.from)}
+          onLeave={phase.phase === 'running' ? leaveMesh : undefined}
         />
       )
   }

@@ -1,4 +1,4 @@
-import { Disc3, LogOut, MonitorSmartphone, Moon, Plus, Settings, Sparkles, Sun } from 'lucide-react'
+import { Plus, Settings, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import Chat from '../components/Chat'
 import { InviteModal } from '../components/InvitePanel'
@@ -6,11 +6,11 @@ import MeshMark from '../components/MeshMark'
 import MeshViz from '../components/MeshViz'
 import { nodeApi } from '../lib/api'
 import { useApp } from '../lib/store'
-import { setThemePref, useThemePref, type ThemePref } from '../lib/theme'
 import type { Phase } from '../lib/types'
 
 interface MainProps {
   onLeave: () => void
+  onOpenSettings: () => void
   /** Kick off the passive→contributor upgrade (public mesh only). */
   onStartSharing?: () => void
 }
@@ -19,11 +19,10 @@ function runningInfo(phase: Phase) {
   return phase.phase === 'running' ? phase : null
 }
 
-export default function Main({ onLeave, onStartSharing }: MainProps) {
+export default function Main({ onOpenSettings, onStartSharing }: MainProps) {
   const { phase, status, lastNodeEvent } = useApp()
   const info = runningInfo(phase)
   const [inviteOpen, setInviteOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [models, setModels] = useState<Array<{ id: string; label: string; local: boolean }>>([])
   const [selectedModel, setSelectedModel] = useState<string | null>(null)
@@ -200,42 +199,14 @@ export default function Main({ onLeave, onStartSharing }: MainProps) {
             <Plus size={15} strokeWidth={2.5} aria-hidden />
             Invite someone
           </button>
-          <div className="relative">
-            <button
-              data-testid="settings-button"
-              onClick={() => setSettingsOpen((s) => !s)}
-              className="flex items-center gap-1.5 text-[13px] text-ink-muted transition-colors hover:text-ink"
-            >
-              <Settings size={14} aria-hidden />
-              Settings
-            </button>
-            {settingsOpen && (
-              <div
-                className="absolute bottom-8 left-0 z-40 w-64 rounded-(--radius-card) border border-edge bg-inset p-4 shadow-xl"
-                data-testid="settings-popover"
-              >
-                <div className="text-[11px] font-semibold tracking-wider text-ink-faint uppercase">
-                  This Mac
-                </div>
-                <div className="mt-2 text-[13px]">
-                  {info?.serving && info.model
-                    ? `Sharing ${shortModel(info.model)}`
-                    : 'Just chatting'}
-                </div>
-                <hr className="my-3 border-edge" />
-                <ThemePicker />
-                <hr className="my-3 border-edge" />
-                <button
-                  data-testid="leave-mesh"
-                  onClick={onLeave}
-                  className="flex items-center gap-1.5 text-[13px] text-bad hover:underline"
-                >
-                  <LogOut size={13} aria-hidden />
-                  Leave this mesh…
-                </button>
-              </div>
-            )}
-          </div>
+          <button
+            data-testid="settings-button"
+            onClick={onOpenSettings}
+            className="flex items-center gap-1.5 text-[13px] text-ink-muted transition-colors hover:text-ink"
+          >
+            <Settings size={14} aria-hidden />
+            Settings
+          </button>
         </div>
       </aside>
 
@@ -268,41 +239,6 @@ export default function Main({ onLeave, onStartSharing }: MainProps) {
           {justJoined} joined your mesh
         </div>
       )}
-    </div>
-  )
-}
-
-const THEME_OPTIONS: Array<{ id: ThemePref; label: string; Icon: typeof Sun }> = [
-  { id: 'dark', label: 'Dark', Icon: Moon },
-  { id: 'light', label: 'Light', Icon: Sun },
-  { id: 'vinyl', label: 'Vinyl', Icon: Disc3 },
-  { id: 'system', label: 'Auto', Icon: MonitorSmartphone },
-]
-
-function ThemePicker() {
-  const pref = useThemePref()
-  return (
-    <div data-testid="theme-picker">
-      <div className="text-[11px] font-semibold tracking-wider text-ink-faint uppercase">
-        Appearance
-      </div>
-      <div className="mt-2 grid grid-cols-2 gap-1">
-        {THEME_OPTIONS.map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            data-testid={`theme-${id}`}
-            onClick={() => setThemePref(id)}
-            className={`flex items-center gap-1.5 rounded-(--radius-control) border px-2.5 py-1.5 text-[12px] transition-colors ${
-              pref === id
-                ? 'border-accent/60 text-accent'
-                : 'border-edge text-ink-muted hover:text-ink'
-            }`}
-          >
-            <Icon size={13} aria-hidden />
-            {label}
-          </button>
-        ))}
-      </div>
     </div>
   )
 }

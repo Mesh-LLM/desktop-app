@@ -48,6 +48,9 @@ export const appApi = {
   history: () => fetch('/app/history').then((r) => json<HistoryMessage[]>(r)),
   /** "New chat": forget the current session so the next turn starts fresh. */
   newChat: () => fetch('/app/new_chat', { method: 'POST' }).then((r) => json<{ ok: boolean }>(r)),
+  /** One-shot read of an invite token delivered by a mesh:// deep link before
+   *  the frontend was listening (e.g. the link launched the app). */
+  pendingInvite: () => fetch('/app/pending_invite').then((r) => json<{ token: string | null }>(r)),
 }
 
 export const nodeApi = {

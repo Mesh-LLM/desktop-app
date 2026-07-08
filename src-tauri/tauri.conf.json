@@ -7,6 +7,13 @@
     "frontendDist": "../ui/dist",
     "beforeBuildCommand": "npm --prefix ../ui run build"
   },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["mesh"]
+      }
+    }
+  },
   "app": {
     "windows": [],
     "security": {
@@ -23,7 +30,8 @@
       "icons/icon.icns"
     ],
     "macOS": {
-      "signingIdentity": "-"
+      "signingIdentity": "-",
+      "entitlements": "entitlements.plist"
     }
   }
 }

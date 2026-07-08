@@ -32,7 +32,9 @@ fn main() {
     let zoom_setup = zoom.clone();
 
     let shutdown_state = state.clone();
+    let invite_state = state.clone();
     tauri::Builder::default()
+        .plugin(tauri_plugin_deep_link::init())
         .menu(|handle| {
             let menu = Menu::default(handle)?;
             let zoom_reset = MenuItem::with_id(
@@ -84,6 +86,28 @@ fn main() {
             save_zoom(next);
         })
         .setup(move |app| {
+            // Invite links: mesh://join/<token> (also mesh://join#<token> and
+            // mesh://join?token=<token>). on_open_url covers both launch-time
+            // URLs (the app was opened by the link) and while-running ones.
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let state = invite_state.clone();
+                app.deep_link().on_open_url(move |event| {
+                    for url in event.urls() {
+                        let Some(token) = extract_invite_token(url.as_str()) else {
+                            continue;
+                        };
+                        *state.pending_invite.lock().expect("pending_invite lock") =
+                            Some(token.clone());
+                        let _ = state
+                            .events
+                            .send(mesh_console::events::AppEvent::NodeEvent {
+                                event: "invite_link",
+                                detail: serde_json::json!({ "token": token }),
+                            });
+                    }
+                });
+            }
             let window =
                 tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
                     .title("Mesh")
@@ -126,6 +150,35 @@ fn main() {
                 unsafe { libc::_exit(0) };
             }
         });
+}
+
+/// Pulls the invite token out of a `mesh://` deep link. Accepted shapes:
+/// `mesh://join/<token>`, `mesh://join#<token>`, `mesh://join?token=<token>`.
+/// Tokens are base64url ([A-Za-z0-9_-]) so no percent-decoding is needed;
+/// stray slashes/whitespace are trimmed. Returns None for other paths or
+/// empty tokens.
+fn extract_invite_token(url: &str) -> Option<String> {
+    let rest = url.trim().strip_prefix("mesh://")?.strip_prefix("join")?;
+    // Whatever separates "join" from the token — slash, fragment, or query
+    // (also tolerating combinations like `join/?token=...` or `join/#...`).
+    let raw = rest.trim().trim_matches('/');
+    let token = if let Some(fragment) = raw.strip_prefix('#') {
+        fragment
+    } else if let Some(query) = raw.strip_prefix('?') {
+        query
+            .split('&')
+            .find_map(|pair| pair.strip_prefix("token="))?
+    } else if rest.starts_with('/') {
+        raw
+    } else {
+        return None;
+    };
+    let token = token.trim().trim_matches('/');
+    let is_base64url = |c: char| c.is_ascii_alphanumeric() || c == '-' || c == '_';
+    if token.is_empty() || !token.chars().all(is_base64url) {
+        return None;
+    }
+    Some(token.to_string())
 }
 
 /// Zoom persists in a tiny JSON blob next to the app's other data
@@ -193,4 +246,42 @@ fn start_backend() -> (Arc<AppState>, u16) {
     });
 
     (state.clone(), ports.app)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract_invite_token;
+
+    #[test]
+    fn accepts_the_documented_shapes() {
+        for url in [
+            "mesh://join/abc-DEF_123",
+            "mesh://join#abc-DEF_123",
+            "mesh://join?token=abc-DEF_123",
+            "mesh://join/?token=abc-DEF_123",
+            "mesh://join/#abc-DEF_123",
+            "  mesh://join/abc-DEF_123/  ",
+        ] {
+            assert_eq!(
+                extract_invite_token(url).as_deref(),
+                Some("abc-DEF_123"),
+                "url: {url}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_junk() {
+        for url in [
+            "mesh://join",
+            "mesh://join/",
+            "mesh://join#",
+            "mesh://join?other=x",
+            "mesh://join/not%20base64url",
+            "mesh://settings/abc",
+            "https://example.com/join/abc",
+        ] {
+            assert_eq!(extract_invite_token(url), None, "url: {url}");
+        }
+    }
 }

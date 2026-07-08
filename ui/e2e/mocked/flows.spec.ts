@@ -239,7 +239,7 @@ test('host flow: scan → reveal → visibility → progress → mesh live with 
   await expect(page.getByText('Your mesh is live.')).toBeVisible()
   await expect(page.getByTestId('invite-qr').locator('svg')).toBeVisible()
   await page.getByTestId('copy-invite').click()
-  await expect(page.getByTestId('copy-invite')).toHaveText('Copied ✓')
+  await expect(page.getByTestId('copy-invite')).toHaveText('Copied')
 
   // The host call carried the chosen model + visibility
   const hostCalls = await page.evaluate(
@@ -334,16 +334,32 @@ test('"Start fresh" forgets the remembered mesh so the banner stays gone', async
   await expect(page.getByTestId('resume-banner')).toHaveCount(0)
 })
 
+test('settings is accessible from the start screen before connecting', async ({ page }) => {
+  await page.goto('/')
+  await page.getByTestId('welcome-settings').click()
+
+  await expect(page.getByTestId('settings-view')).toBeVisible()
+  await expect(page.getByTestId('theme-picker')).toBeVisible()
+  await page.getByTestId('theme-vinyl').click()
+  await expect(page.locator('html')).toHaveClass(/vinyl/)
+  await page.getByTestId('settings-done').click()
+
+  await expect(page.getByTestId('welcome-public')).toBeVisible()
+  await expect(page.locator('html')).toHaveClass(/vinyl/)
+})
+
 test('appearance setting flips to light mode and persists across reload', async ({ page }) => {
   await installMockBackend(page, { startRunning: true })
   await page.goto('/')
   await expect(page.getByTestId('mesh-name')).toBeVisible()
 
   await page.getByTestId('settings-button').click()
+  await expect(page.getByTestId('settings-view')).toBeVisible()
   await expect(page.getByTestId('theme-picker')).toBeVisible()
   await page.getByTestId('theme-light').click()
   await expect(page.locator('html')).toHaveClass(/light/)
   expect(await page.evaluate(() => localStorage.getItem('mesh-theme'))).toBe('light')
+  await page.getByTestId('settings-done').click()
 
   await page.reload()
   await expect(page.getByTestId('mesh-name')).toBeVisible()
@@ -355,6 +371,44 @@ test('appearance setting flips to light mode and persists across reload', async 
   await expect(page.locator('html')).toHaveClass(/dark/)
 })
 
+test('vinyl theme applies the retro palette and persists across reload', async ({ page }) => {
+  await installMockBackend(page, { startRunning: true })
+  await page.goto('/')
+  await expect(page.getByTestId('mesh-name')).toBeVisible()
+
+  await page.getByTestId('settings-button').click()
+  await page.getByTestId('theme-vinyl').click()
+  await expect(page.locator('html')).toHaveClass(/vinyl/)
+  expect(await page.evaluate(() => localStorage.getItem('mesh-theme'))).toBe('vinyl')
+
+  await page.reload()
+  await expect(page.getByTestId('mesh-name')).toBeVisible()
+  await expect(page.locator('html')).toHaveClass(/vinyl/)
+
+  // Back to dark — the shipped default.
+  await page.getByTestId('settings-button').click()
+  await page.getByTestId('theme-dark').click()
+  await expect(page.locator('html')).toHaveClass(/dark/)
+})
+
+test('settings view can leave the active mesh', async ({ page }) => {
+  await installMockBackend(page, { startRunning: true })
+  await page.goto('/')
+  await expect(page.getByTestId('mesh-name')).toBeVisible()
+
+  await page.getByTestId('settings-button').click()
+  await expect(page.getByTestId('settings-mesh-name')).toContainText("test-mac's mesh")
+  await page.getByTestId('leave-mesh').click()
+
+  await expect(page.getByTestId('welcome-public')).toBeVisible()
+  const shutdownCalls = await page.evaluate(
+    () =>
+      (window as unknown as { __mockState: { shutdownCalls: unknown[] } }).__mockState
+        .shutdownCalls,
+  )
+  expect(shutdownCalls).toHaveLength(1)
+})
+
 test('invite modal shows QR and copyable code from the main window', async ({ page }) => {
   // Boot directly into running state
   await installMockBackend(page, { startRunning: true })
@@ -364,7 +418,7 @@ test('invite modal shows QR and copyable code from the main window', async ({ pa
   await expect(page.getByTestId('invite-modal')).toBeVisible()
   await expect(page.getByTestId('invite-qr').locator('svg')).toBeVisible()
   await page.getByTestId('copy-invite').click()
-  await expect(page.getByTestId('copy-invite')).toHaveText('Copied ✓')
+  await expect(page.getByTestId('copy-invite')).toHaveText('Copied')
   await page.keyboard.press('Escape')
   await expect(page.getByTestId('invite-modal')).not.toBeVisible()
 })

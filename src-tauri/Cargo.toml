@@ -52,6 +52,9 @@ goose-mcp = { git = "https://github.com/aaif-goose/goose", rev = "c82c431c", def
 rmcp = { version = "1.4", default-features = false }
 
 tauri = { version = "2", features = [] }
+# mesh:// URL scheme (invite links). Registered in Info.plist at bundle time
+# via the "deep-link" plugin config in tauri.conf.json.
+tauri-plugin-deep-link = "2"
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"] }

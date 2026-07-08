@@ -1,14 +1,16 @@
+import { Plus, Settings, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import Chat from '../components/Chat'
 import { InviteModal } from '../components/InvitePanel'
+import MeshMark from '../components/MeshMark'
 import MeshViz from '../components/MeshViz'
 import { nodeApi } from '../lib/api'
 import { useApp } from '../lib/store'
-import { setThemePref, useThemePref } from '../lib/theme'
 import type { Phase } from '../lib/types'
 
 interface MainProps {
   onLeave: () => void
+  onOpenSettings: () => void
   /** Kick off the passive→contributor upgrade (public mesh only). */
   onStartSharing?: () => void
 }
@@ -17,11 +19,10 @@ function runningInfo(phase: Phase) {
   return phase.phase === 'running' ? phase : null
 }
 
-export default function Main({ onLeave, onStartSharing }: MainProps) {
+export default function Main({ onOpenSettings, onStartSharing }: MainProps) {
   const { phase, status, lastNodeEvent } = useApp()
   const info = runningInfo(phase)
   const [inviteOpen, setInviteOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [models, setModels] = useState<Array<{ id: string; label: string; local: boolean }>>([])
   const [selectedModel, setSelectedModel] = useState<string | null>(null)
@@ -51,10 +52,8 @@ export default function Main({ onLeave, onStartSharing }: MainProps) {
         const real = data.filter((m) => m.id !== 'mesh' && m.id !== 'auto')
         const meshAdvertised = data.some((m) => m.id === 'mesh')
         const list = [
-          { id: 'auto', label: '✨ Auto (best fit)', local: false },
-          ...(meshAdvertised
-            ? [{ id: 'mesh', label: '🧬 Mixture (all models)', local: false }]
-            : []),
+          { id: 'auto', label: 'Auto (best fit)', local: false },
+          ...(meshAdvertised ? [{ id: 'mesh', label: 'Mixture (all models)', local: false }] : []),
           ...real.map((m) => ({
             id: m.id,
             label: m.display_name && m.display_name !== m.id ? m.display_name : shortModel(m.id),
@@ -124,9 +123,7 @@ export default function Main({ onLeave, onStartSharing }: MainProps) {
       <aside className="flex w-[270px] shrink-0 flex-col border-r border-edge bg-panel">
         <div className="px-4 pt-4">
           <div className="flex items-center gap-2 font-semibold">
-            <span className="text-accent" aria-hidden>
-              &#9671;
-            </span>
+            <MeshMark size={17} className="text-accent" pulse={streaming} />
             <span data-testid="mesh-name">{meshName}</span>
           </div>
           <div
@@ -173,19 +170,23 @@ export default function Main({ onLeave, onStartSharing }: MainProps) {
             )}
           </ul>
 
-          {!canServe && info?.mode === 'join' && info?.visibility === 'public' && onStartSharing && (
-            // On the global mesh the upgrade is one click away: shutdown +
-            // rejoin with a model (the chat-only node has no AI runtime).
-            <div className="mt-5">
-              <button
-                data-testid="start-sharing"
-                onClick={onStartSharing}
-                className="pl-1.5 text-[11px] text-accent underline-offset-2 hover:underline"
-              >
-                Start sharing this Mac&rsquo;s power…
-              </button>
-            </div>
-          )}
+          {!canServe &&
+            info?.mode === 'join' &&
+            info?.visibility === 'public' &&
+            onStartSharing && (
+              // On the global mesh the upgrade is one click away: shutdown +
+              // rejoin with a model (the chat-only node has no AI runtime).
+              <div className="mt-5">
+                <button
+                  data-testid="start-sharing"
+                  onClick={onStartSharing}
+                  className="flex items-center gap-1.5 pl-1.5 text-[11px] text-accent underline-offset-2 hover:underline"
+                >
+                  <Sparkles size={11} aria-hidden />
+                  Start sharing this Mac&rsquo;s power…
+                </button>
+              </div>
+            )}
         </div>
 
         <div className="flex flex-col gap-2 p-4">
@@ -193,44 +194,19 @@ export default function Main({ onLeave, onStartSharing }: MainProps) {
             data-testid="invite-button"
             onClick={() => setInviteOpen(true)}
             disabled={!token}
-            className="w-full rounded-(--radius-control) border border-accent/60 bg-panel px-4 py-2.5 text-sm font-semibold text-accent transition-colors hover:bg-accent/10 disabled:opacity-40"
+            className="flex w-full items-center justify-center gap-2 rounded-(--radius-control) border border-accent/60 bg-panel px-4 py-2.5 text-sm font-semibold text-accent transition-colors hover:bg-accent/10 disabled:opacity-40"
           >
-            + Invite someone
+            <Plus size={15} strokeWidth={2.5} aria-hidden />
+            Invite someone
           </button>
-          <div className="relative">
-            <button
-              data-testid="settings-button"
-              onClick={() => setSettingsOpen((s) => !s)}
-              className="text-[13px] text-ink-muted hover:text-ink"
-            >
-              ⚙ Settings
-            </button>
-            {settingsOpen && (
-              <div
-                className="absolute bottom-8 left-0 z-40 w-64 rounded-(--radius-card) border border-edge bg-inset p-4 shadow-xl"
-                data-testid="settings-popover"
-              >
-                <div className="text-[11px] font-semibold tracking-wider text-ink-faint uppercase">
-                  This Mac
-                </div>
-                <div className="mt-2 text-[13px]">
-                  {info?.serving && info.model
-                    ? `Sharing ${shortModel(info.model)}`
-                    : 'Just chatting'}
-                </div>
-                <hr className="my-3 border-edge" />
-                <ThemePicker />
-                <hr className="my-3 border-edge" />
-                <button
-                  data-testid="leave-mesh"
-                  onClick={onLeave}
-                  className="text-[13px] text-bad hover:underline"
-                >
-                  Leave this mesh…
-                </button>
-              </div>
-            )}
-          </div>
+          <button
+            data-testid="settings-button"
+            onClick={onOpenSettings}
+            className="flex items-center gap-1.5 text-[13px] text-ink-muted transition-colors hover:text-ink"
+          >
+            <Settings size={14} aria-hidden />
+            Settings
+          </button>
         </div>
       </aside>
 
@@ -256,39 +232,13 @@ export default function Main({ onLeave, onStartSharing }: MainProps) {
 
       {justJoined && !inviteOpen && (
         <div
-          className="fixed right-5 bottom-5 z-40 rounded-(--radius-card) border border-good/40 bg-panel px-4 py-3 text-sm shadow-xl"
+          className="animate-message-in fixed right-5 bottom-5 z-40 flex items-center gap-2 rounded-(--radius-card) border border-good/40 bg-panel px-4 py-3 text-sm shadow-xl"
           data-testid="peer-toast"
         >
-          <span className="text-good">●</span> {justJoined} joined your mesh
+          <span className="h-2 w-2 rounded-full bg-good" aria-hidden />
+          {justJoined} joined your mesh
         </div>
       )}
-    </div>
-  )
-}
-
-function ThemePicker() {
-  const pref = useThemePref()
-  return (
-    <div data-testid="theme-picker">
-      <div className="text-[11px] font-semibold tracking-wider text-ink-faint uppercase">
-        Appearance
-      </div>
-      <div className="mt-2 flex gap-1">
-        {(['dark', 'light', 'system'] as const).map((t) => (
-          <button
-            key={t}
-            data-testid={`theme-${t}`}
-            onClick={() => setThemePref(t)}
-            className={`rounded-(--radius-control) border px-2.5 py-1 text-[12px] capitalize transition-colors ${
-              pref === t
-                ? 'border-accent/60 text-accent'
-                : 'border-edge text-ink-muted hover:text-ink'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
     </div>
   )
 }
@@ -306,8 +256,3 @@ function shortModel(ref: string): string {
   const tail = ref.split('/').pop() ?? ref
   return tail.replace(/-GGUF.*$/, '').replace(/@.*$/, '')
 }
-
-/** Fold any model spelling — a catalog name like "Qwen3-0.6B-Q4_K_M" or a
- *  serving ref like "unsloth/Qwen3-0.6B-GGUF@main:Q4_K_M" — to a comparable
- *  base ("qwen3-0.6b"), so we can tell which downloaded model is loaded now. */
-

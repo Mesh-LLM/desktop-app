@@ -55,6 +55,11 @@ pub struct AppState {
     pub events: broadcast::Sender<AppEvent>,
     pub ports: Ports,
     pub http: reqwest::Client,
+    /// Invite token from a `mesh://join/<token>` deep link, parked until the
+    /// frontend picks it up (one-shot via GET /app/pending_invite). std Mutex
+    /// (not tokio): the deep-link handler in main.rs is sync, and the critical
+    /// section is a plain Option swap.
+    pub pending_invite: std::sync::Mutex<Option<String>>,
 }
 
 impl AppState {
@@ -67,6 +72,7 @@ impl AppState {
             events,
             ports,
             http: reqwest::Client::new(),
+            pending_invite: std::sync::Mutex::new(None),
         })
     }
 

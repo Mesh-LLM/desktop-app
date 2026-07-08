@@ -1,5 +1,6 @@
+import { Link2, MoveRight } from 'lucide-react'
+import { CopyButton, InviteQr, inviteLink } from '../components/InvitePanel'
 import { Button } from '../components/ui'
-import { CopyButton, InviteQr } from '../components/InvitePanel'
 
 interface MeshLiveProps {
   token: string | null
@@ -15,7 +16,7 @@ export default function MeshLive({ token, model, isPrivate, onGoToChat }: MeshLi
       data-testid="mesh-live-screen"
     >
       <div className="text-center">
-        <h1 className="text-[32px] font-bold tracking-tight">Your mesh is live.</h1>
+        <h1 className="font-display text-[32px] font-bold tracking-tight">Your mesh is live.</h1>
         <p className="mt-2 text-[15px] text-ink-muted">
           {model ?? 'Your model'} is running on this Mac. Now invite someone.
         </p>
@@ -30,13 +31,23 @@ export default function MeshLive({ token, model, isPrivate, onGoToChat }: MeshLi
       )}
 
       <p className="text-sm text-ink-muted">
-        Scan with a phone, or send the code any way you like.
+        Send the link — clicking it opens Mesh and joins in one step. Or scan with a phone.
       </p>
 
       <div className="flex items-center gap-3">
-        {token && <CopyButton text={token} />}
+        {token && (
+          <CopyButton
+            text={inviteLink(token)}
+            label="Copy invite link"
+            icon={Link2}
+            testId="copy-invite-link"
+          />
+        )}
+        {token && <CopyButton text={token} label="Copy code" />}
         <Button data-testid="go-to-chat" onClick={onGoToChat}>
-          Go to chat &rarr;
+          <span className="inline-flex items-center gap-1.5">
+            Go to chat <MoveRight size={15} aria-hidden />
+          </span>
         </Button>
       </div>
 

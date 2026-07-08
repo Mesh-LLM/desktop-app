@@ -1,3 +1,4 @@
+import { Globe, Lock } from 'lucide-react'
 import { useState } from 'react'
 import { BackButton, Button, Card, ReassuranceLine } from '../components/ui'
 import type { Visibility as Vis } from '../lib/types'
@@ -16,7 +17,7 @@ export default function Visibility({ onBack, onChosen }: VisibilityProps) {
       data-testid="visibility-screen"
     >
       <BackButton onClick={onBack} />
-      <h1 className="text-[28px] font-bold tracking-tight">Who can join your mesh?</h1>
+      <h1 className="font-display text-[28px] font-bold tracking-tight">Who can join your mesh?</h1>
       <div className="grid w-full max-w-3xl grid-cols-2 gap-4">
         <Card
           data-testid="visibility-private"
@@ -24,7 +25,7 @@ export default function Visibility({ onBack, onChosen }: VisibilityProps) {
           onClick={() => setChoice('private')}
         >
           <div className="flex items-center gap-2">
-            <span aria-hidden>&#128274;</span>
+            <Lock size={16} className="text-accent" aria-hidden />
             <span className="text-[16px] font-semibold">Invite-only</span>
             <span className="rounded-full border border-accent/50 px-2 py-0.5 text-[11px] text-accent">
               Recommended
@@ -40,7 +41,7 @@ export default function Visibility({ onBack, onChosen }: VisibilityProps) {
           onClick={() => setChoice('public')}
         >
           <div className="flex items-center gap-2">
-            <span aria-hidden>&#127760;</span>
+            <Globe size={16} className="text-accent" aria-hidden />
             <span className="text-[16px] font-semibold">Open</span>
           </div>
           <p className="mt-3 text-sm text-ink-muted">

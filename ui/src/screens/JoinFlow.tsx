@@ -29,7 +29,9 @@ export default function JoinFlow({ prefillToken, onBack, onSubmit }: JoinFlowPro
         <BackButton onClick={onBack} />
         <div className="flex w-full max-w-xl flex-col items-center gap-6">
           <div className="text-center">
-            <h1 className="text-[28px] font-bold tracking-tight">Paste your invite code</h1>
+            <h1 className="font-display text-[28px] font-bold tracking-tight">
+              Paste your invite code
+            </h1>
             <p className="mt-2 text-[15px] text-ink-muted">
               It&rsquo;s the long jumble of letters your friend sent you.
             </p>
@@ -81,7 +83,9 @@ export default function JoinFlow({ prefillToken, onBack, onSubmit }: JoinFlowPro
       <BackButton onClick={() => setStep('token')} />
       <div className="flex w-full max-w-3xl flex-col items-center gap-8">
         <div className="text-center">
-          <h1 className="text-[28px] font-bold tracking-tight">How do you want to take part?</h1>
+          <h1 className="font-display text-[28px] font-bold tracking-tight">
+            How do you want to take part?
+          </h1>
           <p className="mt-2 text-[15px] text-ink-muted">You can change this any time later.</p>
         </div>
         <div className="grid w-full grid-cols-2 gap-4">

@@ -5,19 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mesh</title>
     <script>
-      // Pre-paint mirror of lib/theme.ts so a light-theme user never sees a
-      // dark flash while the bundle loads.
+      // Pre-paint mirror of lib/theme.ts so a light/vinyl-theme user never
+      // sees a black flash while the bundle loads.
       try {
         var themePref = localStorage.getItem('mesh-theme')
-        if (
-          themePref === 'light' ||
-          (themePref === 'system' && matchMedia('(prefers-color-scheme: light)').matches)
-        ) {
-          document.documentElement.classList.remove('dark')
-          document.documentElement.classList.add('light')
-        }
+        var resolved =
+          themePref === 'light' || themePref === 'vinyl'
+            ? themePref
+            : themePref === 'system' && matchMedia('(prefers-color-scheme: light)').matches
+              ? 'light'
+              : 'dark'
+        document.documentElement.classList.remove('dark', 'light', 'vinyl')
+        document.documentElement.classList.add(resolved)
       } catch (e) {}
     </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Righteous&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
     <div id="root"></div>

@@ -1,6 +1,6 @@
 use crate::state::{AppState, Phase};
 use crate::{diagnose, node, proxy};
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::http::{StatusCode, Uri, header};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
@@ -26,6 +26,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/app/invite", get(app_invite))
         .route("/app/pending_invite", get(app_pending_invite))
         .route("/app/chat", post(app_chat))
+        .route("/app/sessions", get(app_sessions).post(app_create_session))
+        .route("/app/sessions/{id}/activate", post(app_activate_session))
+        .route("/app/sessions/{id}/archive", post(app_archive_session))
+        .route("/app/sessions/{id}/history", get(app_session_history))
         .route("/app/history", get(app_history))
         .route("/app/new_chat", post(app_new_chat))
         .route("/app/shutdown", post(app_shutdown))
@@ -134,6 +138,7 @@ async fn app_pending_invite(State(state): State<Arc<AppState>>) -> Response {
 struct ChatRequest {
     model: String,
     text: String,
+    session_id: Option<String>,
 }
 
 /// One agent chat turn, streamed as SSE. The goose agent owns the
@@ -152,15 +157,16 @@ async fn app_chat(State(state): State<Arc<AppState>>, Json(req): Json<ChatReques
             .into_response();
     }
 
-    let handle = match agent::ensure_agent(&state, &req.model).await {
+    let session_id = match req.session_id {
+        Some(id) => id,
+        None => match agent::active_or_create_session().await {
+            Ok(session) => session.id,
+            Err(err) => return session_error(err),
+        },
+    };
+    let handle = match agent::ensure_agent(&state, &req.model, &session_id).await {
         Ok(handle) => handle,
-        Err(err) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": format!("{err:#}") })),
-            )
-                .into_response();
-        }
+        Err(err) => return session_error(err),
     };
 
     // One turn at a time: a concurrent reply on the same session would
@@ -206,6 +212,82 @@ async fn app_chat(State(state): State<Arc<AppState>>, Json(req): Json<ChatReques
     .into_response()
 }
 
+async fn app_sessions() -> Response {
+    match crate::agent::list_sessions().await {
+        Ok(sessions) => Json(sessions).into_response(),
+        Err(err) => session_error(err),
+    }
+}
+
+async fn app_create_session(State(state): State<Arc<AppState>>) -> Response {
+    if state
+        .agent
+        .lock()
+        .await
+        .as_ref()
+        .is_some_and(|handle| handle.turn_lock.try_lock().is_err())
+    {
+        return (StatusCode::CONFLICT, Json(json!({ "error": "busy" }))).into_response();
+    }
+    crate::agent::teardown(&state).await;
+    match crate::agent::create_session().await {
+        Ok(session) => (StatusCode::CREATED, Json(session)).into_response(),
+        Err(err) => session_error(err),
+    }
+}
+
+async fn app_activate_session(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Response {
+    match crate::agent::activate_session(&state, &id).await {
+        Ok(()) => Json(json!({ "ok": true, "session_id": id })).into_response(),
+        Err(err) => session_error(err),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct ArchiveSessionRequest {
+    #[serde(default = "default_true")]
+    archived: bool,
+}
+
+const fn default_true() -> bool {
+    true
+}
+
+async fn app_archive_session(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(req): Json<ArchiveSessionRequest>,
+) -> Response {
+    match crate::agent::archive_session(&state, &id, req.archived).await {
+        Ok(()) => {
+            Json(json!({ "ok": true, "session_id": id, "archived": req.archived })).into_response()
+        }
+        Err(err) => session_error(err),
+    }
+}
+
+async fn app_session_history(Path(id): Path<String>) -> Response {
+    match crate::agent::history_by_id(&id).await {
+        Ok(history) => Json(history).into_response(),
+        Err(err) => session_error(err),
+    }
+}
+
+fn session_error(err: anyhow::Error) -> Response {
+    let message = format!("{err:#}");
+    let status = if message.contains("busy") {
+        StatusCode::CONFLICT
+    } else if message.contains("session_not_found") || message.contains("not found") {
+        StatusCode::NOT_FOUND
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
+    };
+    (status, Json(json!({ "error": message }))).into_response()
+}
+
 /// The persisted conversation, shaped for the chat UI to repaint on launch.
 /// Empty array when there's no ongoing chat (first run or just after reset).
 /// Independent of node state — reading history doesn't need a running mesh.
@@ -217,9 +299,11 @@ async fn app_history() -> Response {
 /// and drop the live agent so it re-reads the (now absent) pointer. The old
 /// conversation stays in goose's store, just no longer the active one.
 async fn app_new_chat(State(state): State<Arc<AppState>>) -> Response {
-    crate::agent::clear_session_pointer();
     crate::agent::teardown(&state).await;
-    Json(json!({ "ok": true })).into_response()
+    match crate::agent::create_session().await {
+        Ok(session) => Json(json!({ "ok": true, "session_id": session.id })).into_response(),
+        Err(err) => session_error(err),
+    }
 }
 
 async fn app_shutdown(State(state): State<Arc<AppState>>) -> Response {

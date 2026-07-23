@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import SwitchMeshDialog from './components/SwitchMeshDialog'
 import Welcome from './screens/Welcome'
 import JoinFlow from './screens/JoinFlow'
 import PublicJoin from './screens/PublicJoin'
@@ -37,6 +38,8 @@ export default function App() {
   // shutdown mid-startup races the launch task, so the switch only fires once
   // the phase is 'running' (see the effect below).
   const [pendingShare, setPendingShare] = useState<string | null>(null)
+  const [pendingSwitch, setPendingSwitch] = useState<LaunchConfig | null>(null)
+  const [switching, setSwitching] = useState(false)
 
   useEffect(() => {
     connect()
@@ -137,10 +140,35 @@ export default function App() {
     }
   }
 
-  // "Back to mesh": re-launch whatever was last remembered, straight from Welcome.
+  const requestLaunch = (config: LaunchConfig) => {
+    if (phase.phase === 'running') {
+      setPendingSwitch(config)
+      return
+    }
+    launch(config)
+  }
+
+  const confirmSwitch = async () => {
+    if (!pendingSwitch || switching) return
+    const config = pendingSwitch
+    setSwitching(true)
+    try {
+      await appApi.shutdown()
+      setPendingSwitch(null)
+      launch(config)
+    } finally {
+      setSwitching(false)
+    }
+  }
+
+  // "Back to mesh" returns to a live connection without relaunching it.
   const resume = () => {
+    if (phase.phase === 'running') {
+      setView({ name: 'main' })
+      return
+    }
     const last = loadLastConfig()
-    if (last) launch(last)
+    if (last) requestLaunch(last)
   }
 
   const openSettings = (from: AppView) => setView({ name: 'settings', from })
@@ -152,9 +180,39 @@ export default function App() {
     setView({ name: 'welcome' })
   }
 
+  const running = phase.phase === 'running' ? phase : null
+  const activeMesh = running
+    ? {
+        name:
+          running.mesh_name ??
+          (running.visibility === 'public' ? 'Global mesh' : 'Your private mesh'),
+        isPublic: running.visibility === 'public',
+      }
+    : undefined
+  const destinationLabel = pendingSwitch
+    ? pendingSwitch.kind === 'public'
+      ? 'the Global mesh'
+      : pendingSwitch.kind === 'host'
+        ? 'a new private mesh'
+        : 'the invited private mesh'
+    : ''
+  const withSwitchDialog = (content: ReactNode) => (
+    <>
+      {content}
+      {pendingSwitch && activeMesh && (
+        <SwitchMeshDialog
+          currentName={activeMesh.name}
+          destination={destinationLabel}
+          onCancel={() => setPendingSwitch(null)}
+          onConfirm={() => void confirmSwitch()}
+        />
+      )}
+    </>
+  )
+
   switch (view.name) {
     case 'welcome':
-      return (
+      return withSwitchDialog(
         <Welcome
           lastConfig={loadLastConfig()}
           onResume={resume}
@@ -163,24 +221,26 @@ export default function App() {
           onJoin={(prefillToken) => setView({ name: 'join', prefillToken })}
           onHost={() => setView({ name: 'host-setup' })}
           onOpenSettings={() => openSettings({ name: 'welcome' })}
-        />
+          activeMesh={activeMesh}
+          onReturnToChat={() => setView({ name: 'main' })}
+        />,
       )
 
     case 'public-mode':
-      return (
+      return withSwitchDialog(
         <PublicJoin
           onBack={() => setView({ name: 'welcome' })}
-          onPassive={() => launch({ kind: 'public', share: false })}
+          onPassive={() => requestLaunch({ kind: 'public', share: false })}
           onContribute={() => setView({ name: 'public-setup' })}
-        />
+        />,
       )
 
     case 'public-setup':
-      return (
+      return withSwitchDialog(
         <PowerSetup
           onBack={() => setView({ name: 'public-mode' })}
-          onModelChosen={(model) => launch({ kind: 'public', share: true, model })}
-        />
+          onModelChosen={(model) => requestLaunch({ kind: 'public', share: true, model })}
+        />,
       )
 
     case 'public-upgrade-setup':
@@ -195,7 +255,7 @@ export default function App() {
       )
 
     case 'join':
-      return (
+      return withSwitchDialog(
         <JoinFlow
           prefillToken={view.prefillToken}
           onBack={() => setView({ name: 'welcome' })}
@@ -203,18 +263,20 @@ export default function App() {
             if (share) {
               setView({ name: 'join-setup', token })
             } else {
-              launch({ kind: 'join', token, share: false })
+              requestLaunch({ kind: 'join', token, share: false })
             }
           }}
-        />
+        />,
       )
 
     case 'join-setup':
-      return (
+      return withSwitchDialog(
         <PowerSetup
           onBack={() => setView({ name: 'join', prefillToken: view.token })}
-          onModelChosen={(model) => launch({ kind: 'join', token: view.token, share: true, model })}
-        />
+          onModelChosen={(model) =>
+            requestLaunch({ kind: 'join', token: view.token, share: true, model })
+          }
+        />,
       )
 
     case 'host-setup':
@@ -226,11 +288,13 @@ export default function App() {
       )
 
     case 'host-visibility':
-      return (
+      return withSwitchDialog(
         <Visibility
           onBack={() => setView({ name: 'host-setup' })}
-          onChosen={(visibility: Vis) => launch({ kind: 'host', model: view.model, visibility })}
-        />
+          onChosen={(visibility: Vis) =>
+            requestLaunch({ kind: 'host', model: view.model, visibility })
+          }
+        />,
       )
 
     case 'progress': {
@@ -254,6 +318,7 @@ export default function App() {
         return (
           <Main
             onLeave={leaveMesh}
+            onGoHome={() => setView({ name: 'welcome' })}
             onOpenSettings={() => openSettings({ name: 'main' })}
             onStartSharing={() => setView({ name: 'public-upgrade-setup' })}
           />
@@ -290,6 +355,7 @@ export default function App() {
       return (
         <Main
           onLeave={leaveMesh}
+          onGoHome={() => setView({ name: 'welcome' })}
           onOpenSettings={() => openSettings({ name: 'main' })}
           onStartSharing={() => setView({ name: 'public-upgrade-setup' })}
         />

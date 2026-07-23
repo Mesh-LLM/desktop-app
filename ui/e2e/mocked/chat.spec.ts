@@ -8,13 +8,9 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('chat streams a reply with thinking folded away and a tok/s stamp', async ({ page }) => {
-  // Model picker defaults to the smart virtual ref: solo/private mesh → "auto"
-  // (mesh routes to best fit; MoA "mesh" needs ≥2 models). The real model is
-  // still listed for explicit pinning.
-  await expect(page.getByTestId('model-picker')).toHaveValue('auto')
-  await expect(
-    page.getByTestId('model-picker').locator('option[value="unsloth/Qwen3-0.6B-GGUF:Q4_K_M"]'),
-  ).toHaveCount(1)
+  // Routing is automatic; concrete model pinning is intentionally absent.
+  await expect(page.getByText('Auto routing', { exact: true })).toBeVisible()
+  await expect(page.getByTestId('model-picker')).toHaveCount(0)
 
   // Empty state with starter chips
   await expect(page.getByText('Say hello.')).toBeVisible()
@@ -49,7 +45,9 @@ test('chat streams a reply with thinking folded away and a tok/s stamp', async (
   const chatCalls = await page.evaluate(
     () => (window as unknown as { __mockState: { chatCalls: unknown[] } }).__mockState.chatCalls,
   )
-  expect(chatCalls).toEqual([{ model: 'auto', text: 'Say hello from the mesh' }])
+  expect(chatCalls).toEqual([
+    { model: 'auto', text: 'Say hello from the mesh', session_id: 'mock-session-1' },
+  ])
 })
 
 test('agent tool activity shows as a chip that completes', async ({ page }) => {
@@ -100,7 +98,9 @@ test('restores the ongoing conversation on launch (persistent session)', async (
   await expect(page.getByTestId('assistant-text')).toContainText('We called it mesh-console.')
 })
 
-test('"New chat" clears the conversation and forgets the session', async ({ page }) => {
+test('"New chat" starts a new local session and keeps the previous chat listed', async ({
+  page,
+}) => {
   await installMockBackend(page, {
     startRunning: true,
     history: [
@@ -111,19 +111,13 @@ test('"New chat" clears the conversation and forgets the session', async ({ page
   await page.goto('/')
   await expect(page.getByTestId('user-message')).toContainText('remember this')
 
-  // The subtle reset: clears the view and calls the backend to drop the session.
+  // The old Goose session remains in the left rail; a fresh session becomes active.
   await page.getByTestId('chat-new').click()
   await expect(page.getByText('Say hello.')).toBeVisible()
   await expect(page.getByTestId('user-message')).toHaveCount(0)
-
-  const newChatCalls = await page.evaluate(
-    () =>
-      (window as unknown as { __mockState: { newChatCalls: unknown[] } }).__mockState.newChatCalls,
-  )
-  expect(newChatCalls).toHaveLength(1)
-
-  // "New chat" is disabled again once the conversation is empty.
-  await expect(page.getByTestId('chat-new')).toBeDisabled()
+  await expect(page.getByTestId('chat-session')).toHaveCount(1)
+  await expect(page.getByTestId('chat-draft')).toHaveCount(1)
+  await expect(page.getByTestId('chat-session').filter({ hasText: 'remember this' })).toBeVisible()
 })
 
 // Regression for #7: GFM markdown (tables etc.) must render as real HTML, not
@@ -150,4 +144,33 @@ test('renders a markdown table as a real table, not raw pipes', async ({ page })
   await expect(answer.locator('td', { hasText: 'Tacos' })).toBeVisible()
   // …and the raw markdown separator row is gone.
   await expect(answer).not.toContainText('|-----|')
+})
+
+test('a chat can be archived to history and restored', async ({ page }) => {
+  await installMockBackend(page, {
+    startRunning: true,
+    history: [
+      { id: 'h1', role: 'user', text: 'archive this conversation' },
+      { id: 'h2', role: 'assistant', text: 'okay' },
+    ],
+  })
+  await page.goto('/')
+  const chat = page.getByTestId('chat-session').first()
+  await chat.click({ button: 'right' })
+  await expect(page.getByTestId('chat-session')).toHaveCount(0)
+  await page.getByTestId('nav-settings').click()
+  await expect(page.getByTestId('settings-chat-restore')).toBeVisible()
+  await page.getByTestId('settings-chat-restore').click()
+  await expect(page.getByTestId('settings-chat-restore')).toHaveCount(0)
+})
+
+test('empty new chats remain one disposable draft until prompted', async ({ page }) => {
+  await installMockBackend(page, { startRunning: true })
+  await page.goto('/')
+  await expect(page.getByTestId('chat-draft')).toHaveCount(1)
+  await expect(page.getByTestId('chat-session')).toHaveCount(0)
+  await page.getByTestId('chat-new').click()
+  await page.getByTestId('chat-new').click()
+  await expect(page.getByTestId('chat-draft')).toHaveCount(1)
+  await expect(page.getByTestId('chat-session')).toHaveCount(0)
 })

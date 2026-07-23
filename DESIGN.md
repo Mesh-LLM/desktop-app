@@ -87,6 +87,16 @@ untestable UI layer).
 
 ## 4. How the pieces work
 
+### Navigation and mesh switching
+- The running node is independent from the visible page. Home and Chat share a
+  top navigation bar; opening Home does not call shutdown, and the connection
+  pill returns directly to the live chat.
+- The SDK hosts one embedded `MeshNode` at a time. Choosing another public or
+  private mesh while connected therefore opens a confirmation. Confirmation
+  performs one orderly shutdown followed by the requested launch; cancellation
+  leaves the current mesh untouched. Local Goose chats survive mesh switches.
+
+
 ### Node lifecycle (`node.rs`)
 - **Host**: `MeshNode::builder().serve().model(...)` with a
   `NativeRuntimeInstallOptions { progress: callback }` so runtime download
@@ -98,12 +108,14 @@ untestable UI layer).
 - Phases: `idle → hosting/joining (with download events) → running`.
 
 ### Agent (`agent.rs`)
-- **One long-lived session that survives restarts.** goose persists its
-  conversation to SQLite under `GOOSE_PATH_ROOT`; we remember which session is
-  "ours" in a `mesh-console-session` pointer file next to it. `ensure_agent`
-  reuses that id (verified via `get_session`) instead of minting a fresh one,
-  so returning to the app continues the same chat. New session only on first
-  run, after a reset, or if the id is gone from the store.
+- **Multiple local chats that survive restarts.** goose persists each
+  conversation to SQLite under `GOOSE_PATH_ROOT`; desktop-owned hidden sessions
+  are marked with project id `mesh-console`, and `mesh-console-session` stores
+  the last active id. `/app/sessions` lists/creates chats, id-scoped activation
+  and history routes switch between them, and `/app/chat` receives an explicit
+  session id. A legacy pointer-only session is marked and migrated on first
+  list. Goose remains the canonical transcript store; the WebView only keeps a
+  convenience copy of the selected id.
 - `Agent::new()`, `update_provider(OpenAI provider → node /v1,
   ModelConfig::new(model))`. Extensions: developer + skills (goose-mcp builtins
   seeded via `register_builtin_extensions`).
@@ -113,10 +125,13 @@ untestable UI layer).
   into UI messages (`shape_history`, unit-tested — same role/content rules as
   the live translator: assistant text/thinking + tool chips; tool-output
   user messages dropped). The Chat repaints from it on mount.
-- **Subtle reset**: `POST /app/new_chat` clears the pointer + tears down the
-  agent so the next turn starts fresh (the old chat stays in goose's store,
-  just no longer active). Surfaced as a quiet "New chat" link in the chat top
-  bar. Distinct from `/app/reset` (leave-mesh / error recovery).
+- **New chat + switching**: the left chat rail creates a new Goose session and
+  preserves earlier sessions for selection. Chats can be archived by right-click
+  or the row archive action, moved into a collapsible History section, and
+  restored later; Goose's `archived_at` remains the source of truth. Only one embedded Agent is loaded
+  at a time; switching while a turn streams is rejected as busy. The legacy
+  `/app/new_chat` endpoint remains as a compatibility route that creates a new
+  session. Distinct from `/app/reset` (leave-mesh / error recovery).
 - **Auto-compaction**: goose summarizes older turns once the conversation
   fills a fraction of the model's context window. We fix that fraction at
   **0.4** (goose default 0.8) via `GOOSE_AUTO_COMPACT_THRESHOLD` in
@@ -124,7 +139,8 @@ untestable UI layer).
   long-lived session accretes history. It's env-only: the threshold isn't part
   of the `reply`/`SessionConfig` API (goose reads it via `get_param`, env over
   config file; `≥1.0` would disable it).
-- Model can be switched per-turn (picker in Chat UI).
+- Desktop chat always sends the virtual model `auto`; concrete model selection
+  is intentionally absent while mesh routing policy is being developed.
 
 ### Diagnose (`diagnose.rs`)
 - `mesh_llm_system::hardware` scan (chip, VRAM rating) + `MODEL_CATALOG` fit

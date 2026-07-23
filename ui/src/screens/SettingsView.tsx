@@ -1,5 +1,17 @@
-import { Disc3, LogOut, MonitorSmartphone, Moon, Settings, Sun, X } from 'lucide-react'
+import {
+  Disc3,
+  History,
+  LogOut,
+  MonitorSmartphone,
+  Moon,
+  RotateCcw,
+  Settings,
+  Sun,
+  X,
+} from 'lucide-react'
+import { useEffect, useState } from 'react'
 import MeshMark from '../components/MeshMark'
+import { listChatSessions, setChatArchived, type ChatSessionSummary } from '../lib/chat-sessions'
 import { Button } from '../components/ui'
 import { useApp } from '../lib/store'
 import { setThemePref, useThemePref, type ThemePref } from '../lib/theme'
@@ -19,6 +31,18 @@ const THEME_OPTIONS: Array<{ id: ThemePref; label: string; Icon: typeof Sun; hin
 
 export default function SettingsView({ onClose, onLeave }: SettingsViewProps) {
   const { phase, status } = useApp()
+  const [archivedChats, setArchivedChats] = useState<ChatSessionSummary[]>([])
+
+  useEffect(() => {
+    void listChatSessions()
+      .then(({ sessions }) => setArchivedChats(sessions.filter((session) => session.archived)))
+      .catch(() => setArchivedChats([]))
+  }, [])
+
+  const restoreChat = async (id: string) => {
+    await setChatArchived(id, false)
+    setArchivedChats((sessions) => sessions.filter((session) => session.id !== id))
+  }
   const running = phase.phase === 'running' ? phase : null
   const hostname = status?.my_hostname ?? status?.hostname
   const meshName =
@@ -90,6 +114,38 @@ export default function SettingsView({ onClose, onLeave }: SettingsViewProps) {
             </div>
           </section>
         </div>
+
+        <section
+          className="mt-4 rounded-(--radius-card) border border-edge bg-inset p-4"
+          data-testid="settings-chat-history"
+        >
+          <div className="flex items-center gap-2 text-[11px] font-semibold tracking-wider text-ink-faint uppercase">
+            <History size={13} aria-hidden /> Archived chats
+          </div>
+          {archivedChats.length === 0 ? (
+            <p className="mt-3 text-[12px] text-ink-faint">No archived chats.</p>
+          ) : (
+            <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto">
+              {archivedChats.map((session) => (
+                <li
+                  key={session.id}
+                  className="flex items-center gap-3 rounded-(--radius-control) bg-panel px-3 py-2"
+                >
+                  <span className="min-w-0 grow truncate text-[12px] text-ink-muted">
+                    {session.title || session.name || 'Chat'}
+                  </span>
+                  <button
+                    data-testid="settings-chat-restore"
+                    onClick={() => void restoreChat(session.id)}
+                    className="flex shrink-0 items-center gap-1 text-[11px] text-accent hover:underline"
+                  >
+                    <RotateCcw size={11} aria-hidden /> Restore
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
         {running && onLeave && (
           <div className="mt-4 rounded-(--radius-card) border border-bad/30 bg-bad/[0.06] p-4">

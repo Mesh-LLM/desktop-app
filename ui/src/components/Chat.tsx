@@ -9,7 +9,6 @@ import {
   Globe,
   Lightbulb,
   Mail,
-  PencilLine,
   Radio,
   Square,
   Terminal,
@@ -31,11 +30,11 @@ const STARTERS = [
 ]
 
 interface ChatProps {
-  models: Array<{ id: string; label: string; local: boolean }>
-  selectedModel: string | null
-  onSelectModel: (id: string) => void
+  sessionId: string | null
+  ready?: boolean
   hostname?: string
   onStreamingChange?: (streaming: boolean) => void
+  onConversationChanged?: () => void
 }
 
 /** Split inline `<think>…</think>` blocks (small reasoning models emit these
@@ -48,12 +47,13 @@ function splitThinking(raw: string): { thinking: string; answer: string } {
 }
 
 export default function Chat({
-  models,
-  selectedModel,
-  onSelectModel,
+  sessionId,
+  ready = true,
   hostname,
   onStreamingChange,
+  onConversationChanged,
 }: ChatProps) {
+  const selectedModel = 'auto'
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -72,15 +72,14 @@ export default function Chat({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
   }, [messages])
 
-  // Repaint the ongoing conversation on mount: goose keeps one long session
-  // that survives restarts, so returning to the app shows where we left off.
-  // A fresh session (first run / after "New chat") simply returns [].
+  // Goose remains the canonical local transcript store. Session-aware
+  // backends address a specific chat; older backends retain the legacy route.
   useEffect(() => {
     let cancelled = false
-    appApi
-      .history()
+    const request = sessionId ? appApi.sessionHistory(sessionId) : appApi.history()
+    request
       .then((past) => {
-        if (cancelled || past.length === 0) return
+        if (cancelled) return
         setMessages(
           past.map((m) => ({
             id: m.id,
@@ -92,16 +91,16 @@ export default function Chat({
         )
       })
       .catch(() => {
-        /* no history to restore — start on the empty state */
+        if (!cancelled) setMessages([])
       })
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [sessionId])
 
   const send = async (text: string) => {
     const prompt = text.trim()
-    if (!prompt || streaming || !selectedModel) return
+    if (!prompt || streaming || !ready) return
     setInput('')
     const userMsg: ChatMessage = { id: `u-${++idSeq.current}`, role: 'user', text: prompt }
     const asstId = `a-${++idSeq.current}`
@@ -132,6 +131,7 @@ export default function Chat({
       await streamChat(
         selectedModel,
         prompt,
+        sessionId,
         {
           onDelta: (delta) => {
             rawRef.current += delta
@@ -169,65 +169,23 @@ export default function Chat({
       update({ streaming: false })
       setStreaming(false)
       abortRef.current = null
+      onConversationChanged?.()
     }
   }
 
   const stop = () => abortRef.current?.abort()
 
-  // "New chat": drop the persisted session on the backend and clear the view.
-  // Subtle by design — the one long session is the default; this is the escape
-  // hatch. Disabled mid-stream and when there's nothing to clear.
-  const newChat = async () => {
-    if (streaming) return
-    try {
-      await appApi.newChat()
-    } catch {
-      /* even if the backend call fails, clear the view — next turn re-syncs */
-    }
-    setMessages([])
-    rawRef.current = ''
-    thinkingRef.current = ''
-  }
-
-  const selectedMeta = models.find((m) => m.id === selectedModel)
-
   return (
     <div className="flex h-full min-w-0 flex-col">
-      {/* top bar */}
-      <div className="flex items-center gap-3 border-b border-edge px-5 py-3">
-        <label className="text-sm text-ink-muted" htmlFor="model-picker">
-          Model:
-        </label>
-        <select
-          id="model-picker"
-          data-testid="model-picker"
-          value={selectedModel ?? ''}
-          onChange={(e) => onSelectModel(e.target.value)}
-          className="rounded-(--radius-control) border border-edge bg-inset px-3 py-1.5 font-mono text-[13px] text-ink outline-none focus:border-accent"
-        >
-          {models.length === 0 && <option value="">No models yet</option>}
-          {models.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-        {selectedMeta && (
-          <span className="flex items-center gap-1.5 text-[12px] text-ink-faint">
-            <Radio size={12} aria-hidden />
-            running on {selectedMeta.local ? 'this Mac' : 'the mesh'}
-          </span>
-        )}
-        <button
-          data-testid="chat-new"
-          onClick={() => void newChat()}
-          disabled={streaming || messages.length === 0}
-          title="Start a fresh conversation — clears this chat's history"
-          className="ml-auto flex items-center gap-1.5 text-[12px] text-ink-faint underline-offset-2 hover:text-ink hover:underline disabled:cursor-default disabled:opacity-40 disabled:hover:no-underline"
-        >
-          <PencilLine size={13} aria-hidden />
-          New chat
-        </button>
+      {/* Routing is intentionally automatic. The mesh chooses a model for
+          every turn; there is no client-side pinning dropdown. */}
+      <div className="flex items-center gap-2 border-b border-edge px-5 py-3">
+        <Brain size={14} className="text-accent" aria-hidden />
+        <span className="text-[13px] font-medium">Auto routing</span>
+        <span className="text-[11px] text-ink-faint">The mesh balances latency and capability</span>
+        <span className="ml-auto flex items-center gap-1.5 font-mono text-[10px] text-ink-faint">
+          <Radio size={10} aria-hidden /> auto
+        </span>
       </div>
 
       {/* messages */}
@@ -237,10 +195,8 @@ export default function Chat({
             <MeshMark size={44} className="text-accent opacity-90" pulse />
             <h2 className="font-display text-[26px] font-bold tracking-tight">Say hello.</h2>
             <p className="max-w-sm text-sm leading-relaxed text-ink-muted">
-              Your message goes straight to{' '}
-              <span className="font-mono">{selectedMeta?.label ?? 'the model'}</span>
-              {selectedMeta?.local ? ' running on this Mac' : ' on your mesh'} — no cloud in
-              between.
+              Your message stays on your mesh. Auto routing chooses the best available host for the
+              turn, balancing responsiveness and capability.
             </p>
             <div className="mt-2 flex flex-wrap justify-center gap-2.5">
               {STARTERS.map((s) => (
@@ -267,12 +223,7 @@ export default function Chat({
                   {m.text}
                 </div>
               ) : (
-                <AssistantBubble
-                  key={m.id}
-                  msg={m}
-                  modelLabel={selectedMeta?.label}
-                  hostname={hostname}
-                />
+                <AssistantBubble key={m.id} msg={m} modelLabel="Auto" hostname={hostname} />
               ),
             )}
           </div>
@@ -288,7 +239,7 @@ export default function Chat({
             rows={1}
             placeholder="Ask anything…"
             aria-label="Prompt"
-            disabled={models.length === 0}
+            disabled={!ready}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -312,7 +263,7 @@ export default function Chat({
             <button
               data-testid="chat-send"
               onClick={() => void send(input)}
-              disabled={!input.trim() || !selectedModel}
+              disabled={!input.trim() || !ready}
               className="rounded-(--radius-control) bg-accent p-3 text-accent-ink transition-all hover:bg-accent-hover active:scale-95 disabled:opacity-40"
               aria-label="Send"
             >

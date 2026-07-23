@@ -67,10 +67,10 @@ test('the agent fetches a local page with web_scrape and completes the turn', as
 
   await page.goto('/')
   await expect(page.getByTestId('mesh-name')).toBeVisible({ timeout: 60_000 })
-  await expect(page.getByTestId('model-picker')).not.toHaveValue('', { timeout: 60_000 })
+  await expect(page.getByText('Auto routing')).toBeVisible({ timeout: 60_000 })
 
+  // Desktop chat intentionally always uses auto routing.
   const model = process.env.MESH_TOOL_TEST_MODEL
-  if (model) await page.getByTestId('model-picker').selectOption(model)
 
   // Send each prompt in turn until a web_scrape chip shows up in that turn's
   // bubble. A turn without a tool call ends with the send button returning

@@ -51,6 +51,22 @@ async fn history_round_trips_a_persisted_session_then_clears() {
     let pointer = root.path().join("mesh-console-session");
     std::fs::write(&pointer, &session.id).unwrap();
 
+    // Reading owned sessions migrates the legacy pointer into Goose's
+    // project_id and exposes it as the active session.
+    let sessions = agent::list_sessions().await.expect("list sessions");
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].id, session.id);
+    assert!(sessions[0].active);
+    assert_eq!(
+        manager
+            .get_session(&session.id, false)
+            .await
+            .unwrap()
+            .project_id
+            .as_deref(),
+        Some("mesh-console")
+    );
+
     // history() should flatten the persisted transcript into UI messages.
     let history = agent::history().await;
     assert_eq!(history.len(), 2, "both turns restored");

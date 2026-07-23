@@ -20,6 +20,7 @@ export interface MockOptions {
   pendingInvite?: string
   /** Seed GET /app/history so the chat repaints a prior conversation on mount
    *  (simulates a persistent goose session surviving an app restart). */
+  peers?: Array<Record<string, unknown>>
   history?: Array<{
     id: string
     role: 'user' | 'assistant'
@@ -104,7 +105,7 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
       node_state: 'serving',
       llama_ready: true,
       hostname: 'test-mac.local',
-      peers: [],
+      peers: opts.peers ?? [],
       models: [MODEL_ID],
       serving_models: ['unsloth/Qwen3-0.6B-GGUF@main:Q4_K_M'],
       my_vram_gb: 115.4,
@@ -132,8 +133,20 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
       joinCalls: [] as Json[],
       chatCalls: [] as Json[],
       newChatCalls: [] as Json[],
-      // Mutable so a "New chat" clears the seeded history for later reads.
+      // Goose-backed conversations exposed through the desktop session API.
       history: (opts.history ?? []) as Json[],
+      sessions: [
+        {
+          id: 'mock-session-1',
+          name: opts.history?.[0]?.text ?? 'New chat',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          message_count: opts.history?.length ?? 0,
+          active: true,
+          archived: false,
+        },
+      ] as Json[],
+      activeSessionId: 'mock-session-1',
       shutdownCalls: [] as Json[],
       // One-shot: cleared on first read, like the real backend.
       pendingInvite: (opts.pendingInvite ?? null) as string | null,
@@ -339,6 +352,40 @@ export async function installMockBackend(page: Page, options: MockOptions = {}) 
       if (path === '/api/models') return json({ mesh_models: [] })
       if (path === '/v1/models')
         return json({ data: [{ id: MODEL_ID, display_name: 'Qwen3-0.6B-Q4_K_M' }] })
+      if (path === '/app/sessions' && (!init?.method || init.method === 'GET')) {
+        return json(state.sessions)
+      }
+      if (path === '/app/sessions' && init?.method === 'POST') {
+        const id = `mock-session-${state.sessions.length + 1}`
+        const session = {
+          id,
+          name: 'New chat',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          message_count: 0,
+          active: true,
+        }
+        state.sessions.forEach((item) => (item.active = false))
+        state.sessions.unshift(session)
+        state.activeSessionId = id
+        state.history = []
+        return json(session, 201)
+      }
+      const sessionMatch = path.match(/^\/app\/sessions\/([^/]+)\/(activate|history)$/)
+      if (sessionMatch?.[2] === 'activate') {
+        state.activeSessionId = decodeURIComponent(sessionMatch[1])
+        state.sessions.forEach((item) => (item.active = item.id === state.activeSessionId))
+        return json({ ok: true })
+      }
+      if (sessionMatch?.[2] === 'history') return json(state.history)
+      const archiveMatch = path.match(/^\/app\/sessions\/([^/]+)\/archive$/)
+      if (archiveMatch) {
+        const body = JSON.parse(String(init?.body ?? '{}'))
+        const id = decodeURIComponent(archiveMatch[1])
+        const session = state.sessions.find((item) => item.id === id)
+        if (session) session.archived = body.archived !== false
+        return json({ ok: true })
+      }
       if (path === '/app/history') return json(state.history)
       if (path === '/app/new_chat') {
         state.newChatCalls.push({})

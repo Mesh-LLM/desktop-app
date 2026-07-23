@@ -46,6 +46,10 @@ export const appApi = {
   reset: () => fetch('/app/reset', { method: 'POST' }).then((r) => json<{ ok: boolean }>(r)),
   /** The persisted conversation, to repaint the ongoing chat on launch. */
   history: () => fetch('/app/history').then((r) => json<HistoryMessage[]>(r)),
+  sessionHistory: (sessionId: string) =>
+    fetch(`/app/sessions/${encodeURIComponent(sessionId)}/history`).then((r) =>
+      json<HistoryMessage[]>(r),
+    ),
   /** "New chat": forget the current session so the next turn starts fresh. */
   newChat: () => fetch('/app/new_chat', { method: 'POST' }).then((r) => json<{ ok: boolean }>(r)),
   /** One-shot read of an invite token delivered by a mesh:// deep link before
@@ -90,13 +94,14 @@ export interface ChatStreamHandlers {
 export async function streamChat(
   model: string,
   text: string,
+  sessionId: string | null,
   handlers: ChatStreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
   const resp = await fetch('/app/chat', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ model, text }),
+    body: JSON.stringify(sessionId ? { model, text, session_id: sessionId } : { model, text }),
     signal,
   })
   if (!resp.ok || !resp.body) {

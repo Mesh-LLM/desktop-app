@@ -95,6 +95,59 @@ test('global mesh: passive client upgrades to sharing this Mac’s compute', asy
   })
 })
 
+test('Home keeps the active mesh running and Chat returns seamlessly', async ({ page }) => {
+  await installMockBackend(page, { startRunning: true })
+  await page.goto('/')
+  await expect(page.getByTestId('mesh-name')).toBeVisible()
+
+  await page.getByTestId('nav-home').click()
+  await expect(page.getByTestId('welcome-public')).toBeVisible()
+  await expect(page.getByTestId('nav-connection')).toBeVisible()
+
+  const shutdownCalls = await page.evaluate(
+    () =>
+      (window as unknown as { __mockState: { shutdownCalls: unknown[] } }).__mockState
+        .shutdownCalls,
+  )
+  expect(shutdownCalls).toHaveLength(0)
+
+  await page.getByTestId('nav-chat').click()
+  await expect(page.getByTestId('mesh-name')).toBeVisible()
+})
+
+test('choosing another mesh confirms before shutdown and relaunch', async ({ page }) => {
+  await installMockBackend(page, { startRunning: true })
+  await page.goto('/')
+  await page.getByTestId('nav-home').click()
+  await page.getByTestId('welcome-public').click()
+  await page.getByTestId('public-continue').click()
+
+  await expect(page.getByTestId('switch-mesh-dialog')).toBeVisible()
+  let shutdownCount = await page.evaluate(
+    () =>
+      (window as unknown as { __mockState: { shutdownCalls: unknown[] } }).__mockState.shutdownCalls
+        .length,
+  )
+  expect(shutdownCount).toBe(0)
+
+  await page.getByTestId('switch-mesh-confirm').click()
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { __mockState: { shutdownCalls: unknown[] } }).__mockState
+            .shutdownCalls.length,
+      ),
+    )
+    .toBe(1)
+  shutdownCount = await page.evaluate(
+    () =>
+      (window as unknown as { __mockState: { shutdownCalls: unknown[] } }).__mockState.shutdownCalls
+        .length,
+  )
+  expect(shutdownCount).toBe(1)
+})
+
 test('main window offers "start sharing" to a public chat-only client', async ({ page }) => {
   await installMockBackend(page, {
     startRunning: true,
@@ -253,8 +306,8 @@ test('host flow: scan → reveal → visibility → progress → mesh live with 
   await page.getByTestId('go-to-chat').click()
   await expect(page.getByTestId('mesh-name')).toContainText("test-mac's mesh")
   await expect(page.getByTestId('mesh-status')).toContainText('Live · invite-only')
-  await expect(page.getByTestId('people-list')).toContainText('This Mac')
-  await expect(page.getByTestId('waiting-for-peers')).toBeVisible()
+  await expect(page.getByTestId('hosts-list')).toContainText('This Mac')
+  await expect(page.getByTestId('mesh-panel')).toBeVisible()
 })
 
 test('join flow validates the invite code and reaches the main window as chat-only', async ({
@@ -336,7 +389,7 @@ test('"Start fresh" forgets the remembered mesh so the banner stays gone', async
 
 test('settings is accessible from the start screen before connecting', async ({ page }) => {
   await page.goto('/')
-  await page.getByTestId('welcome-settings').click()
+  await page.getByTestId('nav-settings').click()
 
   await expect(page.getByTestId('settings-view')).toBeVisible()
   await expect(page.getByTestId('theme-picker')).toBeVisible()
@@ -353,7 +406,7 @@ test('appearance setting flips to light mode and persists across reload', async 
   await page.goto('/')
   await expect(page.getByTestId('mesh-name')).toBeVisible()
 
-  await page.getByTestId('settings-button').click()
+  await page.getByTestId('nav-settings').click()
   await expect(page.getByTestId('settings-view')).toBeVisible()
   await expect(page.getByTestId('theme-picker')).toBeVisible()
   await page.getByTestId('theme-light').click()
@@ -366,7 +419,7 @@ test('appearance setting flips to light mode and persists across reload', async 
   await expect(page.locator('html')).toHaveClass(/light/)
 
   // Back to dark — the shipped default.
-  await page.getByTestId('settings-button').click()
+  await page.getByTestId('nav-settings').click()
   await page.getByTestId('theme-dark').click()
   await expect(page.locator('html')).toHaveClass(/dark/)
 })
@@ -376,7 +429,7 @@ test('vinyl theme applies the retro palette and persists across reload', async (
   await page.goto('/')
   await expect(page.getByTestId('mesh-name')).toBeVisible()
 
-  await page.getByTestId('settings-button').click()
+  await page.getByTestId('nav-settings').click()
   await page.getByTestId('theme-vinyl').click()
   await expect(page.locator('html')).toHaveClass(/vinyl/)
   expect(await page.evaluate(() => localStorage.getItem('mesh-theme'))).toBe('vinyl')
@@ -386,7 +439,7 @@ test('vinyl theme applies the retro palette and persists across reload', async (
   await expect(page.locator('html')).toHaveClass(/vinyl/)
 
   // Back to dark — the shipped default.
-  await page.getByTestId('settings-button').click()
+  await page.getByTestId('nav-settings').click()
   await page.getByTestId('theme-dark').click()
   await expect(page.locator('html')).toHaveClass(/dark/)
 })
@@ -396,7 +449,7 @@ test('settings view can leave the active mesh', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByTestId('mesh-name')).toBeVisible()
 
-  await page.getByTestId('settings-button').click()
+  await page.getByTestId('nav-settings').click()
   await expect(page.getByTestId('settings-mesh-name')).toContainText("test-mac's mesh")
   await page.getByTestId('leave-mesh').click()
 

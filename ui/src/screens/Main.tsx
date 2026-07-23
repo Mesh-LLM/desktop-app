@@ -1,17 +1,25 @@
-import { Plus, Settings, Sparkles } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import AppNavigation from '../components/AppNavigation'
 import Chat from '../components/Chat'
+import ChatHistorySidebar from '../components/ChatHistorySidebar'
 import { InviteModal } from '../components/InvitePanel'
-import MeshMark from '../components/MeshMark'
-import MeshViz from '../components/MeshViz'
-import { nodeApi } from '../lib/api'
+import MeshPanel from '../components/MeshPanel'
+import {
+  activateChatSession,
+  createChatSession,
+  listChatSessions,
+  loadActiveChatId,
+  saveActiveChatId,
+  setChatArchived,
+  type ChatSessionSummary,
+} from '../lib/chat-sessions'
 import { useApp } from '../lib/store'
 import type { Phase } from '../lib/types'
 
 interface MainProps {
   onLeave: () => void
   onOpenSettings: () => void
-  /** Kick off the passive→contributor upgrade (public mesh only). */
+  onGoHome: () => void
   onStartSharing?: () => void
 }
 
@@ -19,67 +27,57 @@ function runningInfo(phase: Phase) {
   return phase.phase === 'running' ? phase : null
 }
 
-export default function Main({ onOpenSettings, onStartSharing }: MainProps) {
+export default function Main({ onOpenSettings, onGoHome, onStartSharing }: MainProps) {
   const { phase, status, lastNodeEvent } = useApp()
   const info = runningInfo(phase)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [streaming, setStreaming] = useState(false)
-  const [models, setModels] = useState<Array<{ id: string; label: string; local: boolean }>>([])
-  const [selectedModel, setSelectedModel] = useState<string | null>(null)
   const [justJoined, setJustJoined] = useState<string | null>(null)
+  const [sessions, setSessions] = useState<ChatSessionSummary[]>([])
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(loadActiveChatId)
+  const [sessionsSupported, setSessionsSupported] = useState(true)
 
   const token = status?.token ?? info?.invite_token ?? null
-  // Open if either our own record (RunningInfo, e.g. the global mesh or a public
-  // host) or the live node status says so — private is the safe default.
   const isPrivate = !(info?.visibility === 'public' || status?.publication_state === 'public')
   const hostname = status?.my_hostname ?? status?.hostname
   const meshName =
     info?.mesh_name ?? (hostname ? `${hostname.replace(/\.local$/, '')}'s mesh` : 'Your mesh')
+  const peers = useMemo(() => status?.peers ?? [], [status?.peers])
+  const canServe = Boolean(info?.serving)
+  const canUpgrade = !canServe && info?.mode === 'join' && info?.visibility === 'public'
 
-  // Model list: /v1/models has chat-ready ids that propagate across the mesh.
-  // Virtual refs (mesh-app's ladder, validated there in tests/model_selection.rs):
-  //   "auto" — mesh routes each request to the best-fit model; works with 1+.
-  //   "mesh" — Mixture-of-Agents fan-out; the mesh 503s below 2 real models,
-  //            and only advertises the "mesh" id itself once ≥2 exist.
-  // Smart default: public mesh or ≥3 real models → "mesh", else "auto".
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      try {
-        const { data } = await nodeApi.models()
-        if (cancelled) return
-        const serving = new Set(status?.serving_models ?? [])
-        const real = data.filter((m) => m.id !== 'mesh' && m.id !== 'auto')
-        const meshAdvertised = data.some((m) => m.id === 'mesh')
-        const list = [
-          { id: 'auto', label: 'Auto (best fit)', local: false },
-          ...(meshAdvertised ? [{ id: 'mesh', label: 'Mixture (all models)', local: false }] : []),
-          ...real.map((m) => ({
-            id: m.id,
-            label: m.display_name && m.display_name !== m.id ? m.display_name : shortModel(m.id),
-            local: [...serving].some(
-              (s) => s.includes(m.id) || m.id.includes(s.split('@')[0] ?? s),
-            ),
-          })),
-        ]
-        setModels(list)
-        const smart = (!isPrivate || real.length >= 3) && meshAdvertised ? 'mesh' : 'auto'
-        setSelectedModel((sel) => sel ?? smart)
-      } catch {
-        /* node restarting */
+  const refreshSessions = useCallback(async () => {
+    try {
+      const result = await listChatSessions()
+      setSessionsSupported(true)
+      let available = result.sessions
+      if (available.length === 0) {
+        const created = await createChatSession()
+        available = [created]
       }
+      setSessions(available)
+      const preferred = loadActiveChatId()
+      const active =
+        (preferred && available.some((session) => session.id === preferred) && preferred) ||
+        result.active_session_id ||
+        available[0]?.id ||
+        null
+      setActiveSessionId(active)
+      if (active) saveActiveChatId(active)
+    } catch {
+      // Older backend compatibility: Chat falls back to /app/history and the
+      // single conversation remains available while the app upgrades.
+      setSessionsSupported(false)
+      setSessions([])
+      setActiveSessionId(null)
     }
-    void load()
-    const t = setInterval(load, 15_000)
-    return () => {
-      cancelled = true
-      clearInterval(t)
-    }
-  }, [status?.serving_models, isPrivate])
+  }, [])
 
-  // Peer-join toast + invite modal live line. setState happens inside timer
-  // callbacks (never synchronously in the effect body) to avoid cascading
-  // renders — react-hooks/set-state-in-effect.
+  useEffect(() => {
+    const timer = setTimeout(() => void refreshSessions(), 0)
+    return () => clearTimeout(timer)
+  }, [refreshSessions])
+
   useEffect(() => {
     if (lastNodeEvent?.event !== 'peer_joined') return
     const label =
@@ -93,166 +91,119 @@ export default function Main({ onOpenSettings, onStartSharing }: MainProps) {
     }
   }, [lastNodeEvent])
 
-  const peers = useMemo(() => status?.peers ?? [], [status?.peers])
-  const people = useMemo(() => {
-    const self = {
-      key: 'self',
-      name: 'This Mac',
-      sub: info?.serving && info.model ? `sharing ${shortModel(info.model)}` : 'just chatting',
-      state: 'good' as const,
+  const selectSession = async (id: string) => {
+    if (streaming || id === activeSessionId) return
+    try {
+      await activateChatSession(id)
+      setActiveSessionId(id)
+    } catch {
+      /* keep the current conversation selected */
     }
-    const others = peers.map((p, i) => ({
-      key: p.node_id ?? String(i),
-      name: p.hostname ?? `${(p.node_id ?? '').slice(0, 8)}…`,
-      sub: p.serving_models?.length
-        ? `sharing ${shortModel(p.serving_models[0])}`
-        : 'just chatting',
-      state: 'good' as const,
-    }))
-    return [self, ...others]
-  }, [peers, info])
+  }
 
-  // Which installed models are actually loaded on THIS node right now. Match by
-  // Whether this node is sharing its compute (can run models locally). Drives
-  // the "start sharing" upgrade offer for chat-only clients.
-  const canServe = Boolean(info?.serving)
+  const archiveSession = async (id: string, archived: boolean) => {
+    if (streaming) return
+    try {
+      await setChatArchived(id, archived)
+      if (archived && id === activeSessionId) {
+        const next = sessions.find((session) => session.id !== id && !session.archived)
+        if (next) {
+          await activateChatSession(next.id)
+          setActiveSessionId(next.id)
+        } else {
+          const created = await createChatSession()
+          setActiveSessionId(created.id)
+        }
+      }
+      await refreshSessions()
+    } catch {
+      /* preserve the current list if archiving fails */
+    }
+  }
+
+  const newSession = async () => {
+    if (streaming || !sessionsSupported) return
+    const current = sessions.find((session) => session.id === activeSessionId)
+    // Blank sessions are disposable drafts, not chat history. Reuse the active
+    // draft so repeated New Chat clicks never accumulate empty conversations.
+    if (current?.message_count === 0) return
+    try {
+      const session = await createChatSession()
+      saveActiveChatId(session.id)
+      setSessions((existing) => [session, ...existing.filter((item) => item.id !== session.id)])
+      setActiveSessionId(session.id)
+    } catch {
+      /* the current conversation remains usable */
+    }
+  }
 
   return (
-    <div className="flex h-screen">
-      {/* sidebar */}
-      <aside className="flex w-[270px] shrink-0 flex-col border-r border-edge bg-panel">
-        <div className="px-4 pt-4">
-          <div className="flex items-center gap-2 font-semibold">
-            <MeshMark size={17} className="text-accent" pulse={streaming} />
-            <span data-testid="mesh-name">{meshName}</span>
-          </div>
+    <div className="flex h-screen flex-col">
+      <AppNavigation
+        current="chat"
+        connected
+        meshName={meshName}
+        isPublic={!isPrivate}
+        onHome={onGoHome}
+        onChat={() => {}}
+        onSettings={onOpenSettings}
+      />
+      <div className="flex min-h-0 grow">
+        <ChatHistorySidebar
+          sessions={sessions}
+          activeId={activeSessionId}
+          streaming={streaming}
+          onSelect={(id) => void selectSession(id)}
+          onNew={() => void newSession()}
+          onArchive={(id, archived) => void archiveSession(id, archived)}
+        />
+
+        <main className="min-w-0 grow">
+          <Chat
+            key={activeSessionId ?? 'legacy'}
+            sessionId={activeSessionId}
+            ready={!sessionsSupported || activeSessionId !== null}
+            hostname={hostname}
+            onStreamingChange={setStreaming}
+            onConversationChanged={() => void refreshSessions()}
+          />
+        </main>
+
+        <MeshPanel
+          meshName={meshName}
+          isPrivate={isPrivate}
+          peers={peers}
+          self={{
+            name: 'This Mac',
+            serving: canServe,
+            model: info?.model ?? null,
+            vramGb: status?.my_vram_gb,
+          }}
+          streaming={streaming}
+          token={token}
+          onInvite={() => setInviteOpen(true)}
+          onStartSharing={canUpgrade ? onStartSharing : undefined}
+        />
+
+        {inviteOpen && token && (
+          <InviteModal
+            token={token}
+            isPrivate={isPrivate}
+            onClose={() => setInviteOpen(false)}
+            justJoined={justJoined}
+          />
+        )}
+
+        {justJoined && !inviteOpen && (
           <div
-            className="mt-1 flex items-center gap-1.5 text-[12px] text-ink-muted"
-            data-testid="mesh-status"
+            className="animate-message-in fixed right-5 bottom-5 z-40 flex items-center gap-2 rounded-(--radius-card) border border-good/40 bg-panel px-4 py-3 text-sm shadow-xl"
+            data-testid="peer-toast"
           >
             <span className="h-2 w-2 rounded-full bg-good" aria-hidden />
-            Live · {isPrivate ? 'invite-only' : 'open'}
+            {justJoined} joined your mesh
           </div>
-        </div>
-
-        <MeshViz
-          variant="mini"
-          peers={peers.length}
-          streaming={streaming}
-          className="mx-4 mt-3 h-[110px] rounded-(--radius-control) bg-inset"
-        />
-
-        <div className="mt-4 grow overflow-y-auto px-4">
-          <SectionLabel label="People" count={people.length} />
-          <ul className="mt-1 flex flex-col gap-2" data-testid="people-list">
-            {people.map((p) => (
-              <li key={p.key} className="text-[13px]">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-good" aria-hidden />
-                  <span className="truncate font-medium">{p.name}</span>
-                </div>
-                <div className="pl-4 text-[12px] text-ink-faint">{p.sub}</div>
-              </li>
-            ))}
-            {peers.length === 0 && (
-              <li
-                className="pl-4 text-[12px] text-ink-faint italic"
-                data-testid="waiting-for-peers"
-              >
-                Waiting for your first invitee…{' '}
-                <button
-                  className="text-accent underline-offset-2 hover:underline"
-                  onClick={() => setInviteOpen(true)}
-                >
-                  Show invite
-                </button>
-              </li>
-            )}
-          </ul>
-
-          {!canServe &&
-            info?.mode === 'join' &&
-            info?.visibility === 'public' &&
-            onStartSharing && (
-              // On the global mesh the upgrade is one click away: shutdown +
-              // rejoin with a model (the chat-only node has no AI runtime).
-              <div className="mt-5">
-                <button
-                  data-testid="start-sharing"
-                  onClick={onStartSharing}
-                  className="flex items-center gap-1.5 pl-1.5 text-[11px] text-accent underline-offset-2 hover:underline"
-                >
-                  <Sparkles size={11} aria-hidden />
-                  Start sharing this Mac&rsquo;s power…
-                </button>
-              </div>
-            )}
-        </div>
-
-        <div className="flex flex-col gap-2 p-4">
-          <button
-            data-testid="invite-button"
-            onClick={() => setInviteOpen(true)}
-            disabled={!token}
-            className="flex w-full items-center justify-center gap-2 rounded-(--radius-control) border border-accent/60 bg-panel px-4 py-2.5 text-sm font-semibold text-accent transition-colors hover:bg-accent/10 disabled:opacity-40"
-          >
-            <Plus size={15} strokeWidth={2.5} aria-hidden />
-            Invite someone
-          </button>
-          <button
-            data-testid="settings-button"
-            onClick={onOpenSettings}
-            className="flex items-center gap-1.5 text-[13px] text-ink-muted transition-colors hover:text-ink"
-          >
-            <Settings size={14} aria-hidden />
-            Settings
-          </button>
-        </div>
-      </aside>
-
-      {/* chat */}
-      <main className="min-w-0 grow">
-        <Chat
-          models={models}
-          selectedModel={selectedModel}
-          onSelectModel={setSelectedModel}
-          hostname={hostname}
-          onStreamingChange={setStreaming}
-        />
-      </main>
-
-      {inviteOpen && token && (
-        <InviteModal
-          token={token}
-          isPrivate={isPrivate}
-          onClose={() => setInviteOpen(false)}
-          justJoined={justJoined}
-        />
-      )}
-
-      {justJoined && !inviteOpen && (
-        <div
-          className="animate-message-in fixed right-5 bottom-5 z-40 flex items-center gap-2 rounded-(--radius-card) border border-good/40 bg-panel px-4 py-3 text-sm shadow-xl"
-          data-testid="peer-toast"
-        >
-          <span className="h-2 w-2 rounded-full bg-good" aria-hidden />
-          {justJoined} joined your mesh
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
-}
-
-function SectionLabel({ label, count }: { label: string; count: number }) {
-  return (
-    <div className="flex items-center justify-between text-[11px] font-semibold tracking-wider text-ink-faint uppercase">
-      <span>{label}</span>
-      <span className="font-mono">{count}</span>
-    </div>
-  )
-}
-
-function shortModel(ref: string): string {
-  const tail = ref.split('/').pop() ?? ref
-  return tail.replace(/-GGUF.*$/, '').replace(/@.*$/, '')
 }

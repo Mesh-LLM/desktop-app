@@ -60,7 +60,7 @@ test('a second instance joins via the invite token and chats over the mesh', asy
   await expect(page.getByTestId('mesh-name')).toBeVisible({ timeout: 180_000 })
 
   // The host appears in the joiner's people list
-  await expect(page.getByTestId('people-list')).toContainText('This Mac')
+  await expect(page.getByTestId('participants-list')).toContainText('This Mac')
   await expect
     .poll(
       async () => {
@@ -72,7 +72,7 @@ test('a second instance joins via the invite token and chats over the mesh', asy
     .toBeGreaterThan(0)
 
   // Chat from the joiner routes over iroh to the host's model
-  await expect(page.getByTestId('model-picker')).not.toHaveValue('', { timeout: 60_000 })
+  await expect(page.getByText('Auto routing')).toBeVisible({ timeout: 60_000 })
   await page
     .getByTestId('chat-input')
     .fill('Reply with the single word: mesh. Do not use any tools.')

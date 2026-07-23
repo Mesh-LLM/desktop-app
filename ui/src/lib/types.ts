@@ -75,11 +75,17 @@ export interface DiagnoseReport {
 // ---- node management API (subset of StatusPayload we render) ----
 
 export interface PeerInfo {
+  id?: string
   node_id?: string
   hostname?: string
   node_state?: string | null
+  role?: string
+  models?: string[]
   serving_models?: string[]
+  hosted_models?: string[]
   vram_gb?: number
+  rtt_ms?: number | null
+  latency_ms?: number
 }
 
 export interface StatusPayload {

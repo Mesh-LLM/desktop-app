@@ -59,7 +59,7 @@ test('host a private mesh through the UI and chat with the real model', async ({
 
   // Chat with the real model
   await page.getByTestId('go-to-chat').click()
-  await expect(page.getByTestId('model-picker')).not.toHaveValue('', { timeout: 30_000 })
+  await expect(page.getByText('Auto routing')).toBeVisible({ timeout: 30_000 })
   await page.getByTestId('chat-input').fill('Say the word mesh.')
   await page.getByTestId('chat-send').click()
 
